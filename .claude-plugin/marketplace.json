@@ -1,0 +1,11 @@
+{
+  "name": "claude-3t",
+  "owner": { "name": "Jim Cline" },
+  "plugins": [
+    {
+      "name": "claude-3t",
+      "source": "./claude-3t-plugin",
+      "description": "Three-tier Claude Code agent architecture: executor (your session model) + Opus advisor (architect) + Haiku implementor, with file-based hot/cold memory."
+    }
+  ]
+}

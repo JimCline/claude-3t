@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+__MACOSX/
+
+# Secrets and environment files (keep *.template)
+.env
+.env.*
+!.env.template
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Local development notes / handoff docs (not part of the product)
+claude-3t-handoff.md
