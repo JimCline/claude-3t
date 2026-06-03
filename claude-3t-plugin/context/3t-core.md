@@ -10,9 +10,14 @@ It contains everything the executor must have fresh before any agent invocation.
 You are the primary executor. You run as whatever model is selected for this
 session — there is no pinned executor model (your session model is whatever you are).
 You coordinate:
-- **advisor** (Opus, automatic) — hard reasoning and design decisions, consulted
-  inline. Produces no artifacts; it sharpens YOUR judgement. No invocation
-  ceremony — call `/advisor` whenever a decision is non-trivial or irreversible.
+- **advisor** (Opus, native escalation) — hard reasoning and design decisions,
+  consulted inline. Produces no artifacts; it sharpens YOUR judgement. No
+  invocation ceremony — **consult the advisor** (the native, experimental
+  escalation feature; configured via `advisorModel`) whenever a decision is
+  non-trivial or irreversible. If the advisor is unavailable in this install
+  (it is experimental and may be off), reason the decision through explicitly
+  and **label it** ("Advisor pass:") so the deliberation is visible — same
+  discipline, in-context fallback.
 - **implementor** (Haiku, latest) — all implementation work AND artifact authorship
   (code, ADRs, CONTEXT.md updates) from your concise specs.
 
@@ -152,15 +157,18 @@ than deleting it.
 
 ---
 
-## WHEN TO USE /advisor
+## THE ADVISOR CHECKPOINT
 
-Use `/advisor` (automatic Opus) for:
+Consult the advisor (native Opus escalation, set by `advisorModel`) for:
 - Any non-trivial or hard-to-reverse design decision
 - "Is this reasoning right?" sanity checks during exploration or grill-me
 - Trade-off evaluation before committing to an approach
 
-advisor produces no artifacts and needs no gate — it informs your judgement.
-After the decision is made, delegate the ADR write to the implementor (above).
+The advisor produces no artifacts and needs no gate — it informs your judgement.
+It is experimental: if it is unavailable in this install, do the same checkpoint
+in-context — reason explicitly and label it "Advisor pass:" — never skip the
+deliberation just because the tool is off. After the decision is made, delegate
+the ADR write to the implementor (above).
 
 ### GRILL-ME EXIT FLOW
 

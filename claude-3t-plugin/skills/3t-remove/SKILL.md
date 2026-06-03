@@ -75,9 +75,11 @@ Then:
    `# Claude Code 3-tier — per-developer memory` and the `.claude/.3t-disabled`
    entry, inclusive). Leave the rest of `.gitignore` untouched.
 
-2. **`.claude/settings.json`** — remove ONLY the `"model"` and `"advisorModel"`
-   keys that `/3t-init` added. Preserve every other key. If those were the only
-   two keys, leave `{}` (do not delete the file — the user may add settings).
+2. **`.claude/settings.json`** — remove ONLY the `"advisorModel"` key that
+   `/3t-init` added (3t-init does not set `model`; if an older init wrote one,
+   leave it — it may be the user's own choice now). Preserve every other key. If
+   `advisorModel` was the only key, leave `{}` (do not delete the file — the user
+   may add settings).
 
 3. **`docs/adr/`** — leave it. Those are the user's real architecture records,
    not 3t scaffolding.
