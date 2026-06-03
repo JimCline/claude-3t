@@ -6,7 +6,7 @@ script, no server, no container.
 | Tier | Model | Delivered by |
 |---|---|---|
 | **Executor** | your session model (primary session) | SessionStart hook anchor + `/claude-3t:3t-start` skill |
-| **Architect** | Opus | `advisorModel` in project `settings.json` (set by `/claude-3t:3t-init`) |
+| **Architect** | Opus | native advisor (experimental), set by `advisorModel` in project `settings.json` (`/claude-3t:3t-init`) |
 | **Implementor** | Haiku (default — configurable, see below) | `claude-3t:implementor` subagent |
 
 ## Install
@@ -60,33 +60,41 @@ Run `/claude-3t:3t-remove`. It offers two modes (and confirms before deleting):
   dormant in this project while every file stays put. Reversible: `rm
   .claude/.3t-disabled`.
 - **Full remove** — deletes the scaffolded memory + cold files, strips the 3t
-  `.gitignore` block and the `model`/`advisorModel` keys, and leaves `docs/adr`
-  and your other settings intact. Committed files (`CONTEXT.md`, `cold/`) are
-  recoverable with `git restore`.
+  `.gitignore` block and the `advisorModel` key, and leaves `docs/adr` and your
+  other settings (including your `model`) intact. Committed files (`CONTEXT.md`,
+  `cold/`) are recoverable with `git restore`.
 
 Either way the plugin stays installed globally. To remove it everywhere:
 `claude plugin uninstall claude-3t`.
 
 ## Choosing the advisor model
 
-The advisor (architect tier) is set by the native `advisorModel` key in the
-project's `.claude/settings.json`, which `/claude-3t:3t-init` writes as:
+The advisor (architect tier) is the native, **experimental** advisor escalation:
+when the executor needs stronger judgement it escalates to the advisor model,
+then resumes. It is set by the `advisorModel` key in the project's `.claude/settings.json`.
+The executor/advisor split works under **any** executor model, so `/claude-3t:3t-init`
+sets only `advisorModel` and leaves your main `model` alone:
 
 ```json
 {
-  "model": "opusplan",
   "advisorModel": "opus"
 }
 ```
 
-To change it, edit the `advisorModel` value to any model alias (`opus`, `sonnet`,
-`haiku`) or a pinned model ID (e.g. `claude-opus-4-8`). It takes effect next
-session. Unlike the implementor, this is a **native, per-project** setting — no
-plugin file involved — so it survives plugin updates and is the clean place to
-tune the architect tier per project.
+Claude Code's advisor strategy recommends Sonnet as the main model with Opus as
+the advisor — near-Opus judgement at lower token cost
+(https://claude.com/blog/the-advisor-strategy) — but that's a recommendation, not
+a requirement: run Opus at low effort or any other executor and the advisor tier
+still works. To change the advisor, edit `advisorModel` to any model alias
+(`opus`, `sonnet`, `haiku`) or a pinned model ID (e.g. `claude-opus-4-8`); it
+takes effect next session. This is a **native, per-project** setting — no plugin
+file involved — so it survives plugin updates.
 
-For a one-off change in the current session only, type `/advisor` at the prompt
-to set or confirm the advisor model without editing `settings.json`.
+For interactive setup or a one-off change in the current session, type
+`/advisor` at the prompt to pick or confirm the advisor model (Opus / Sonnet /
+no advisor) without editing `settings.json`. Because the feature is experimental
+and may be unavailable, the executor falls back to explicit, labeled in-context
+reasoning for hard decisions when no advisor responds.
 
 ## Choosing the implementor model
 

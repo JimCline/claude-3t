@@ -38,22 +38,45 @@ opt-in switch.
 
 ## Step 3 — Write settings.json (model config)
 
-If `.claude/settings.json` does not exist, ask the user which model setup they
-want, then write it. Default recommendation: `opusplan` + advisor on Opus.
+The executor/advisor split works under **any** executor model — Sonnet, or Opus
+at low effort, or anything else. So the only key the plugin actually sets is
+`advisorModel`; the main `model` is left to the user's preference. Do NOT write
+or overwrite `model`.
+
+Set `advisorModel: opus` — the native, load-bearing key that routes hard or
+irreversible decisions to Opus when you consult the advisor (changing its value
+changes which model responds). If `.claude/settings.json` does not exist, write:
 
 ```jsonc
 {
-  "model": "opusplan",
   "advisorModel": "opus"
 }
 ```
 
-If `.claude/settings.json` already exists, do NOT overwrite it. Instead show the
-two keys and tell the user to merge them in manually:
-`"model": "opusplan"`, `"advisorModel": "opus"`.
+If it already exists, do NOT overwrite it — merge in `"advisorModel": "opus"`
+(or tell the user to). Confirm it is set before finishing.
 
-The advisor is the architect tier — `advisorModel` is what makes hard/irreversible
-design decisions route to Opus. Confirm it is set before finishing.
+**Recommendation only (don't impose):** Claude Code's advisor strategy suggests
+Sonnet as the main model with Opus as the advisor — near-Opus judgement at lower
+token cost (https://claude.com/blog/the-advisor-strategy), which also fits the
+3t thesis of a lean executor that coordinates and delegates. Mention it, but
+whatever the user runs as their executor is fine; the advisor tier is orthogonal.
+
+## Step 3a — Configure & verify the advisor (recommended)
+
+Ask the user: **"Configure the advisor model now? (recommended)"**
+
+If yes:
+1. Have them run **`/advisor`** — the native (experimental) picker — and select
+   **Opus** as the advisor. `advisorModel` written in Step 3 is the durable
+   default; `/advisor` is the interactive way to set or confirm it. (See
+   https://claude.com/blog/the-advisor-strategy.)
+2. **Smoke-test it:** consult the advisor once now (e.g. ask it to sanity-check
+   this very setup). If it responds, the advisor tier is live in this install.
+   If it does NOT respond — the feature is experimental and may be unavailable —
+   tell the user the executor will fall back to explicit, labeled in-context
+   reasoning for hard decisions until the advisor is enabled. The protocol works
+   either way.
 
 ## Step 4 — Update .gitignore
 
