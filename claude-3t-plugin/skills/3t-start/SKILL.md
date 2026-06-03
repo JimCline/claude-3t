@@ -71,6 +71,36 @@ then continue.
 
 ---
 
+## STEP 4a — Verify the advisor (per-developer, every session)
+
+The advisor is the architect tier, but it is **experimental and per-developer**:
+a committed `advisorModel` in `settings.json` is only a team default — it does
+not guarantee each teammate has the advisor enabled in their own client. `/3t-init`
+runs once per project, so a teammate who clones an already-initialized repo never
+sees the advisor setup. This step closes that gap on every session start.
+
+Check whether an advisor model is configured:
+
+```bash
+grep -hs '"advisorModel"' .claude/settings.json .claude/settings.local.json ~/.claude/settings.json 2>/dev/null | head -1
+```
+
+- **Found** → tell the user: "Advisor configured: [model]." No action needed.
+- **Not found** → recommend setup, do NOT block:
+
+  ```
+  No advisor model configured for you yet. The architect tier routes hard or
+  irreversible decisions to a stronger model. To enable it, run /advisor and
+  pick Opus (experimental). Until then I'll fall back to explicit, labeled
+  in-context reasoning ("Advisor pass:") for hard decisions.
+  ```
+
+Do not run a token-spending smoke-test every session — the grep is enough. The
+first actual advisor consult this session reveals whether the feature responds;
+if it doesn't, use the labeled in-context fallback.
+
+---
+
 ## STEP 5 — Detect project state
 
 Scan for artifacts:

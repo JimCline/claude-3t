@@ -78,6 +78,13 @@ If yes:
    reasoning for hard decisions until the advisor is enabled. The protocol works
    either way.
 
+Note: this configures the advisor for **you**, the initializing developer. The
+advisor is experimental and per-developer, so teammates who clone an
+already-initialized repo will not run this skill. They are handled by
+`/claude-3t:3t-start`, which checks for an advisor every session and recommends
+setup if none is configured. Re-running this step is harmless (it only merges the
+`advisorModel` key), so it is safe to run again.
+
 ## Step 4 — Update .gitignore
 
 Append (only if not already present) the per-developer memory exclusions.
