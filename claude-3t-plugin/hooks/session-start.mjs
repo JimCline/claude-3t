@@ -100,4 +100,5 @@ BEFORE doing anything else, ask the user exactly this and wait for an answer:
   ask again unless the user brings it up.
 
 (Other commands once started: /claude-3t:3t-status, /claude-3t:3t-checkpoint,
-/claude-3t:3t-leaving. Implementation → claude-3t:implementor subagent.)`);
+/claude-3t:3t-debrief, /claude-3t:3t-leaving. Implementation → claude-3t:implementor
+subagent.)`);

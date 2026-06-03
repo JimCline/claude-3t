@@ -64,6 +64,10 @@ just shown it, stop and show it now, confirming each box:
 
 [ ] 3t-core.md re-read ✓
 [ ] Task spec satisfies the Tech Lead Standard (Haiku-completable, zero follow-ups)
+[ ] Write budget ≤ ~6 files (count them) — if more, split into batches
+[ ] No tightly-coupled / state-machine file delegated (own those directly)
+[ ] No file edited by you AFTER the implementor would read it (or its new state re-stated)
+[ ] Side-effecting unit? spec requires a REAL side-effect test, not just stubs
 [ ] Cold index rows handed to the agent (or topics to scan) — list or "none needed"
 [ ] Prompt is spec + file names only — NO raw file contents or conversation history
 [ ] If raw content/history IS included → Extended Context Override approved + logged

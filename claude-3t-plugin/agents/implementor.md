@@ -99,6 +99,33 @@ Document every assumption in completion report.
 
 ---
 
+## Partial Completion — WHEN YOU WON'T FINISH THE BATCH
+
+You wind down after a couple dozen tool calls. If the batch is bigger than you
+can finish cleanly in one invocation (many files to read + write), do NOT trail
+off into a vague progress note — that reads to the executor like a reminder, not
+a handoff, and work gets dropped.
+
+Instead, stop at a SAFE point (no half-written file, no broken build you can
+avoid) and emit a structured PARTIAL COMPLETION report:
+
+```
+IMPLEMENTOR PARTIAL COMPLETION
+─────────────────────────────────────────────────────
+Reason: ran out of runway before finishing the batch
+Completed: [files written + what each does — explicit list]
+Remaining: [files/work NOT done — explicit list, in suggested order]
+Safe state: [does it build/test as-is? any cleanup the executor needs first?]
+Suggested next batch: [the ≤6-write slice to delegate next]
+─────────────────────────────────────────────────────
+```
+
+This is NOT an escalation (no ownership transfer) and NOT a failure — it is an
+honest "here is exactly where I stopped" so the executor can resume cleanly. If
+you can finish the batch, do; this is only for when you genuinely cannot.
+
+---
+
 ## Completion Report — STRICT
 
 IMPLEMENTATION COMPLETE
@@ -176,6 +203,11 @@ IMPLEMENTOR EXIT CHECKLIST
 [ ] IMPLEMENTOR_MEMORY.md written IF escalation or repeated assumptions
     occurred this invocation:
     [written | n/a — clean execution]
+
+[ ] If I could not finish the batch: a structured PARTIAL COMPLETION
+    report (Completed / Remaining / Safe state / Suggested next batch)
+    was emitted — NOT a vague progress note:
+    [emitted | n/a — batch finished]
 ─────────────────────────────────────────────────────
 CHECKLIST COMPLETE — returning report to the executor
 ```

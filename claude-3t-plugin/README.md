@@ -45,6 +45,7 @@ loads. Both must be yes for the protocol to engage.
 /claude-3t:3t-start       # begin/resume a session — loads protocol + hot memory
 /claude-3t:3t-status      # memory state, cold index, model status, compliance
 /claude-3t:3t-checkpoint  # write a session snapshot now
+/claude-3t:3t-debrief     # post-work debrief — route lessons to memory / upstream
 /claude-3t:3t-leaving     # departure protocol for autonomous work
 /claude-3t:3t-remove      # deactivate or fully remove 3t from this project
 ```
@@ -149,7 +150,7 @@ claude-3t-plugin/
 ├── .claude-plugin/plugin.json
 ├── hooks/{hooks.json, session-start.mjs}   # gated SessionStart anchor
 ├── context/{3t-core,3t-reference}.md        # executor protocol (read by /claude-3t:3t-start)
-├── skills/{3t-start,3t-init,3t-status,3t-checkpoint,3t-leaving}/SKILL.md
+├── skills/{3t-start,3t-init,3t-status,3t-checkpoint,3t-debrief,3t-leaving}/SKILL.md
 ├── agents/implementor.md                    # Haiku subagent
 └── templates/                               # blank project files /claude-3t:3t-init copies in
 ```
