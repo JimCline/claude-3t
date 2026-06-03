@@ -98,6 +98,18 @@ Size and sequence every batch:
 - **Write budget: ≤ ~6 file writes per delegation.** Count the writes the spec
   implies. Over budget → split into ordered batches (peripheral files first,
   then callers + tests, then review/gap tests).
+- **But a write is not a unit of effort.** The implementor can exhaust its
+  tool-call ceiling on a SINGLE hard file — an unfamiliar API, new test
+  scaffolding, an iterative debug loop — even when the write count is well under
+  budget. Flag files likely to need heavy reads/edits and give a hard one its own
+  batch (or own it directly). The budget is a floor, not a guarantee; the
+  post-delegation audit below is what catches the times your estimate was wrong.
+- **Order items for drop-resilience.** A truncated return loses the LAST spec
+  items first. Put cheap, must-not-drop items (docs, AC updates, an issue file)
+  FIRST or in their own batch — never last behind a high-iteration file.
+- **State placement structurally when scope matters.** "near the top of the
+  file" is ambiguous; say "at namespace level, before the [TestFixture] class,
+  not nested inside it." Vague placement comes back as misplaced code.
 - **Own tightly-coupled / state-machine logic yourself.** Do not describe a
   complex branching state machine to the implementor via comments — that is the
   1-2-tool-call exception inverted. Write those files directly.
@@ -283,6 +295,33 @@ it as a HALT: check actual file state, then either finish the remaining work
 yourself or re-delegate the remainder as a smaller batch (≤ ~6 writes). The
 PARTIAL COMPLETION report (in the implementor's contract) is the structured form
 of this; a freeform note is the unstructured form and gets the same handling.
+
+---
+
+## POST-DELEGATION AUDIT — DO NOT TRUST THE REPORT
+
+The implementor's completion report can be missing or truncated (it may be cut
+off mid-sentence before it can summarize). So after EVERY implementor return,
+the executor independently verifies the work — never on the report alone:
+
+1. **Existence / completeness.** Every deliverable named in the spec was actually
+   written. A dropped tail item (the issue doc, the last test) is the most common
+   silent failure. List the spec's files and confirm each.
+2. **Build / test.** Re-run the compile and the tests YOURSELF. Do not take
+   "tests pass" on faith — under truncation that line never arrived. A build
+   rejects a wrong-scoped duplicate; failing tests reveal missing code. This is
+   the only check that catches a file that EXISTS but is wrong (e.g. a class
+   written in the wrong scope that a formatter then duplicated).
+3. **Read before you rebuild on it.** If the return was partial or truncated,
+   **Read each touched file before re-doing or building on that work.** Do NOT
+   layer a correct version on top of a partial one — that is what produces
+   duplicates and merge garbage. Clean up the partial state first, then continue.
+
+A failed audit is handled like a HALT: finish the remaining/wrong work yourself,
+or re-delegate the remainder as a smaller batch (≤ ~6 writes, hard files
+isolated). Budget-by-effort reduces how often you hit the ceiling; THIS audit
+catches the times the estimate was wrong — it is the load-bearing safety net and
+does not depend on the implementor behaving.
 
 ---
 

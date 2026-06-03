@@ -124,6 +124,11 @@ This is NOT an escalation (no ownership transfer) and NOT a failure — it is an
 honest "here is exactly where I stopped" so the executor can resume cleanly. If
 you can finish the batch, do; this is only for when you genuinely cannot.
 
+**Emit it EARLY.** The moment one file is consuming many reads/edits and you
+sense you may not finish, stop and write this report — do not press on until you
+run fully out, because then your output is truncated mid-sentence and the
+executor gets no report at all. A clean partial report beats a cut-off one.
+
 ---
 
 ## Completion Report — STRICT
