@@ -109,6 +109,7 @@ Then, in a project:
 | `/claude-3t:3t-start` | Begin/resume a session — load protocol + hot memory |
 | `/claude-3t:3t-status` | Memory state, cold index, model status, compliance |
 | `/claude-3t:3t-checkpoint` | Write a session snapshot now |
+| `/claude-3t:3t-debrief` | Post-work debrief — route lessons to memory or upstream feedback |
 | `/claude-3t:3t-leaving` | Departure protocol for autonomous work |
 | `/claude-3t:3t-remove` | Deactivate or fully remove 3t from the project |
 

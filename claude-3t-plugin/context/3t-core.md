@@ -89,6 +89,28 @@ Rules:
    Override (see below).
 4. Note in MEMORY.md: what was delegated and why (one line).
 
+### SPEC SIZING & SEQUENCING (prevents partial returns)
+
+The implementor wraps up after a couple dozen tool calls — a batch needing
+~10 reads + ~9 writes will not finish in one invocation and comes back partial.
+Size and sequence every batch:
+
+- **Write budget: ≤ ~6 file writes per delegation.** Count the writes the spec
+  implies. Over budget → split into ordered batches (peripheral files first,
+  then callers + tests, then review/gap tests).
+- **Own tightly-coupled / state-machine logic yourself.** Do not describe a
+  complex branching state machine to the implementor via comments — that is the
+  1-2-tool-call exception inverted. Write those files directly.
+- **Sequence your own edits BEFORE delegating dependent work.** If YOU edit a
+  file the implementor has already read (or will rely on), its reads are now
+  stale and it cannot anticipate the change. Either make your edits first, or
+  **re-state the file's new contents/behavior in the spec** so the implementor
+  is not working from a desynced read.
+- **Side-effecting units need a real test, not just stubs.** If the spec
+  introduces a new unit with DB / metric / IO side effects, explicitly require a
+  test that exercises the real side effect — stubbed callers (e.g. workflow
+  replay stubs) do not cover persistence or counters.
+
 This contract is parallel-safe: every agent gets its own prompt, so fork mode
 spawns concurrent implementors with no shared-file contention.
 
@@ -110,6 +132,20 @@ Target:  implementor
 ─────────────────────────────────────────────────────
 [ ] Task spec satisfies the Tech Lead Standard
     (Haiku-completable with zero follow-up questions)
+
+[ ] Write budget: spec implies ≤ ~6 file writes
+    Counted: [N]. If >6 → STOP and split into batches.
+
+[ ] No tightly-coupled / state-machine file is being
+    delegated (own those directly): [confirmed | n-a]
+
+[ ] No file in this spec was edited by me AFTER the implementor
+    would have read it; any file I changed that it relies on has
+    its new state re-stated in the spec: [confirmed | n-a]
+
+[ ] If the spec introduces a side-effecting unit (DB/metric/IO),
+    it requires a test of the REAL side effect, not just stubs:
+    [confirmed | n-a]
 
 [ ] Cold index rows handed to the agent (or topics to scan)
     Rows/topics: [list, or "none needed"]
@@ -213,6 +249,15 @@ When a subagent returns a HALT report:
 Show HALT report to user — never silently absorb it.
 Every HALT logged to MEMORY.md under Known Risks.
 A HALT does NOT transfer batch ownership. Only ESCALATION does.
+
+**Soft-HALT recognition.** A freeform "progress note" the implementor returns
+after doing a lot of work — reading like a reminder-to-self rather than a clean
+report ("I've done X and Y, still need to do Z…") — is a SOFT HALT: it ran out
+of runway. Do not read it as a continuation suggestion or as completion. Treat
+it as a HALT: check actual file state, then either finish the remaining work
+yourself or re-delegate the remainder as a smaller batch (≤ ~6 writes). The
+PARTIAL COMPLETION report (in the implementor's contract) is the structured form
+of this; a freeform note is the unstructured form and gets the same handling.
 
 ---
 
