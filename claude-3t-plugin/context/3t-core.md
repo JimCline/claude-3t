@@ -111,6 +111,30 @@ Size and sequence every batch:
   test that exercises the real side effect — stubbed callers (e.g. workflow
   replay stubs) do not cover persistence or counters.
 
+### SPLIT PARALLEL OR SEQUENTIAL?
+
+When the work is too big for one round, the split is not always sequential.
+Decide by dependency:
+
+- **Independent chunks → fan out (parallel).** If the chunks have **disjoint
+  write sets** and **no ordering dependency** (e.g. three unrelated endpoints,
+  per-module changes that don't reference each other), spawn one implementor per
+  chunk via FORK MODE (see 3t-reference.md): each gets its own ≤6-write spec,
+  then reconcile. This is the fastest way through a large batch and is what the
+  per-prompt handoff contract is built for.
+- **Dependency chain → sequence (NOT parallel).** If a later chunk depends on an
+  earlier chunk's output (callers depend on the endpoint; tests depend on the
+  code), run ordered batches one at a time. Forking these concurrently
+  reintroduces the stale-read failure — chunk B reads files chunk A is still
+  writing.
+- **Serialize shared-file writes regardless.** Two parallel implementors both
+  appending to `cold/INDEX.md`, `CONTEXT.md`, or a shared registration/DI file
+  will clobber each other. Route those writes to ONE agent, or have the executor
+  do them after reconcile — never split a shared append across forks.
+
+Rule of thumb: *too big → are the pieces independent? Yes → fork parallel.
+No → split into sequential batches.*
+
 This contract is parallel-safe: every agent gets its own prompt, so fork mode
 spawns concurrent implementors with no shared-file contention.
 
@@ -134,7 +158,8 @@ Target:  implementor
     (Haiku-completable with zero follow-up questions)
 
 [ ] Write budget: spec implies ≤ ~6 file writes
-    Counted: [N]. If >6 → STOP and split into batches.
+    Counted: [N]. If >6 → STOP and split: fork parallel if the
+    chunks are independent, else sequential batches.
 
 [ ] No tightly-coupled / state-machine file is being
     delegated (own those directly): [confirmed | n-a]

@@ -51,6 +51,12 @@ implementor.
 
 ## FORK MODE COORDINATION
 
+Use this to fan out a batch that is too big for one implementor round, when the
+chunks are **independent** (disjoint write sets, no ordering dependency) — see
+"SPLIT PARALLEL OR SEQUENTIAL?" in 3t-core.md. Dependency chains stay sequential;
+shared-file writes (INDEX.md, CONTEXT.md, registrations) are never split across
+forks.
+
 Mandatory order:
 1. Spawn all forks (CLAUDE_CODE_FORK_SUBAGENT=1), each with its OWN concise
    prompt — the handoff is per-prompt, so concurrent forks never contend.
