@@ -43,6 +43,52 @@ const toolName = payload.tool_name || "";
 const input = payload.tool_input || {};
 const subagent = String(input.subagent_type || "");
 
+// Workflow delegation path (mode ON). The implementor pool is spawned INSIDE a
+// background workflow, so the Task/Agent gate below never sees those calls — the
+// only hook point is the top-level Workflow launch. Fire a workflow-specific
+// reminder here, and only when this developer has enabled workflow delegation
+// (flag .claude/.3t-workflows = "enabled"). The post-audit reminder is folded in
+// because Workflow returns at LAUNCH (background) — a PostToolUse hook would fire
+// before any work happened, so this is the one useful gate.
+if (toolName === "Workflow") {
+  const WORKFLOWS = join(projectDir, ".claude", ".3t-workflows");
+  let enabled = false;
+  try {
+    enabled = /enabled/.test(readFileSync(WORKFLOWS, "utf8"));
+  } catch {
+    /* no flag → mode off → say nothing */
+  }
+  if (!enabled) process.exit(0);
+
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        additionalContext: `# WORKFLOW DELEGATION — gate before launching
+
+You are delegating implementor work via a workflow. Per 3t-core.md (DYNAMIC
+WORKFLOW DELEGATION) confirm BEFORE this launch:
+
+[ ] Announced this delegation in one line ("Delegating via a workflow — N implementor(s)")
+[ ] PRE-AGENT CHECKLIST run for EACH implementor spec (Tech Lead Standard, ≤6 writes,
+    no tightly-coupled file, no stale read, cold rows, spec + file names only)
+[ ] Every implementor agent() call pins model: 'haiku' (never inherit the session model)
+[ ] Every implementor agent() call uses agentType: 'claude-3t:implementor' + schema: COMPLETION_SCHEMA
+[ ] Shared-file writes (INDEX.md, CONTEXT.md, registrations) routed to ONE agent or done by you
+
+AFTER the workflow completes (you'll get a task-notification, not a tool return):
+[ ] Reconcile results; handle any escalation flag (escalation.status !== 'none') yourself
+[ ] POST-DELEGATION AUDIT — re-run build/test YOURSELF; the schema guarantees the
+    report arrived, not that the work is complete
+[ ] specQuality 'had gaps' → write the lesson to EXECUTOR_MEMORY.md
+
+If any pre-launch box fails: STOP, resolve visibly, then launch.`,
+      },
+    })
+  );
+  process.exit(0);
+}
+
 // Gate 3: only the implementor delegation. Other agent calls pass silently.
 // The subagent-spawning tool is named "Task" in some harnesses and "Agent" in
 // others — accept either so the hook is not silently inert.

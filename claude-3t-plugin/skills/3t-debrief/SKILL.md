@@ -80,9 +80,13 @@ Evidence: [the concrete failure this session]
 Proposed change: [checklist box / implementor instruction / hook / skill]
 ```
 
-Tell the user: "Plugin-level gaps logged to 3t-plugin-feedback.md — file these
-upstream at the claude-3t repo (issue or PR) so every project benefits. They are
-NOT applied to your installed plugin automatically."
+Tell the user: "Plugin-level gaps logged to `3t-plugin-feedback.md`. To get them
+fixed in the plugin itself, file each entry as a GitHub issue on
+**JimCline/claude-3t** with the label **`feedback`** — paste the entry block as
+the issue body. The maintainer skill `/3t-apply-feedback` reads those issues and
+applies the improvements to the plugin source. They are NOT applied to your
+installed plugin automatically; run `claude plugin update claude-3t` after a new
+version ships."
 
 ## STEP 5 — Confirm
 

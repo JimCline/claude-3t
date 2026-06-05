@@ -125,6 +125,58 @@ override this — the executor invokes the namespaced `claude-3t:implementor`, s
 plain project `implementor` is a separate agent. Editing the plugin file is the
 reliable lever.
 
+## Dynamic-workflow delegation (opt-in)
+
+By default the executor delegates implementation two ways: it does small things
+itself, or it fans an independent batch out to parallel `claude-3t:implementor`
+subagents (**fork mode**). There is an optional third gear: routing delegation
+through the `Workflow` tool.
+
+It is a **per-developer mode switch**, offered once on your first `/claude-3t:3t-start`
+and stored in the gitignored flag `.claude/.3t-workflows` (`enabled` / `disabled`):
+
+- **On** → the executor routes *all* delegated implementor work through a
+  background workflow that runs the implementor (always Haiku) under a
+  structured-output schema. The payoff is a **completion report that can't
+  truncate** — the long-standing failure mode where a runway-starved implementor
+  cuts off mid-report — plus deterministic fan-out/pipeline orchestration for
+  large batches. The executor announces each workflow delegation before spawning.
+- **Off** (default) → nothing changes; direct + fork delegation as before.
+
+The tradeoff: a workflow runs in the background, so the executor can't take over
+an escalation mid-run — a blocker comes back as a structured flag handled after
+the batch completes. The executor still independently re-runs build/test after
+every workflow (the schema guarantees the report arrived, not that the work is
+complete). Change your choice anytime by editing `.claude/.3t-workflows`.
+
+## Contributing feedback
+
+The plugin has a built-in feedback loop:
+
+1. **Capture** — when something goes wrong in a project session (HALT,
+   escalation, spec gap, audit failure), run `/claude-3t:3t-debrief`. It routes
+   project-specific lessons to that project's memory files and writes
+   *protocol-level* gaps to `.claude/context/3t-plugin-feedback.md`.
+
+2. **File** — for each entry in `3t-plugin-feedback.md` that belongs in the
+   plugin itself (not just your project), open a GitHub issue on
+   **JimCline/claude-3t** with the label **`feedback`** and paste the entry block
+   as the issue body:
+   ```
+   Gap: [what the protocol/agent did not handle]
+   Evidence: [the concrete failure]
+   Proposed change: [checklist box / instruction / hook / skill]
+   ```
+
+3. **Apply** — in this repo, run `/3t-apply-feedback`. It reads open feedback
+   issues (or accepts pasted content), clusters them, proposes specific changes to
+   plugin files, and applies approved ones through the 3t workflow. Applied issues
+   are closed with a version reference.
+
+4. **Update** — once a new version ships, run
+   `claude plugin marketplace update claude-3t && claude plugin update claude-3t`
+   in downstream projects.
+
 ## Development — releasing changes
 
 **Bump `version` in `.claude-plugin/plugin.json` on every change you want installs

@@ -107,6 +107,29 @@ Never run `git commit` or `git push` unless the spec explicitly includes a
 
 ---
 
+## Structured-Output Mode (workflow invocation)
+
+You may be invoked inside a dynamic workflow with a structured-output schema. In
+that case a StructuredOutput instruction is appended to this prompt and your
+return is a JSON object, not free text. Nothing about your CONTRACT changes —
+only the return format:
+
+- Populate the schema fields with the SAME content your STRICT completion report
+  would contain (done / filesChanged / tests / coldIndexUpdated / assumptions /
+  missingContext / alsoNoticed / specQuality + gaps).
+- The EXIT CHECKLIST becomes schema booleans (e.g. `noUnsolicitedGit`,
+  `onlySpecFiles`) — the same gate, expressed as fields. Do not skip the
+  underlying checks; just report them in the schema instead of as visible text.
+- Inline escalation/HALT is unavailable in a workflow (no one is watching
+  mid-run). Report any blocker via the `escalation` field
+  (status / reason / safeState / remaining) instead of an escalation message —
+  the executor handles it after the workflow returns.
+
+When invoked directly or forked (no schema), use the free-text completion report
+and visible EXIT CHECKLIST as normal — that remains the default.
+
+---
+
 ## Assumption-First Ambiguity
 
 For minor ambiguities — make a stated assumption and continue.
