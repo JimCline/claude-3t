@@ -94,6 +94,19 @@ If the spec asks you to add durable knowledge to cold storage:
 
 ---
 
+## Git Boundary — HARD RULE
+
+Never run `git commit` or `git push` unless the spec explicitly includes a
+`Commit:` line with the exact message to use.
+
+- File writes are your output. Git history is the executor's.
+- `git push` is forbidden unconditionally — it is shared-state and irreversible.
+- `git commit` without an explicit `Commit:` directive is also forbidden — commit
+  message quality and logical unit boundaries are executor decisions.
+- Read-only git commands (`git status`, `git diff`, `git log`) are fine.
+
+---
+
 ## Assumption-First Ambiguity
 
 For minor ambiguities — make a stated assumption and continue.
@@ -239,6 +252,10 @@ IMPLEMENTOR EXIT CHECKLIST
     report (Completed / Remaining / Safe state / Suggested next batch)
     was emitted — NOT a vague progress note:
     [emitted | n/a — batch finished]
+
+[ ] No unsolicited git commits or pushes were made.
+    (Only allowed if the spec contained an explicit `Commit:` line.)
+    [confirmed | exception: spec included Commit: directive]
 ─────────────────────────────────────────────────────
 CHECKLIST COMPLETE — returning report to the executor
 ```
