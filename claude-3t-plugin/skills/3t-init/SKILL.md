@@ -99,9 +99,10 @@ grep -q "CLAUDE.local.md" .gitignore 2>/dev/null || cat >> .gitignore <<'EOF'
 .claude/context/IMPLEMENTOR_MEMORY.md
 .claude/context/OVERRIDE_LOG.md
 .claude/CLAUDE.local.md
-# 3-tier transient flags (session activation + deactivation)
+# 3-tier transient flags (session activation + deactivation + delegation mode)
 .claude/.3t-active
 .claude/.3t-disabled
+.claude/.3t-workflows
 EOF
 ```
 

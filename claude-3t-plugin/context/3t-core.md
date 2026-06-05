@@ -150,6 +150,77 @@ No → split into sequential batches.*
 This contract is parallel-safe: every agent gets its own prompt, so fork mode
 spawns concurrent implementors with no shared-file contention.
 
+### MODE FIRST: IS WORKFLOW DELEGATION ENABLED?
+
+Before applying the fork/sequential rules above, check the delegation mode
+(per-developer flag `.claude/.3t-workflows`, set at `/3t-start` STEP 4b):
+
+- **Mode OFF (default)** → everything above is unchanged. Direct execution +
+  fork mode are the delegation path.
+- **Mode ON** → workflows become the delegation path. The SAME
+  independent-vs-dependent analysis still runs, but it now chooses the workflow
+  *shape* instead of fork-vs-single-invoke:
+
+  | Situation | Mode OFF | Mode ON |
+  |---|---|---|
+  | 1–2 tool calls | executor does it directly | executor does it directly |
+  | tightly-coupled / state-machine | executor owns it directly | executor owns it directly |
+  | single discrete delegated task | one implementor invoke | 1-agent workflow |
+  | independent batch | fork mode | fan-out workflow (`parallel`) |
+  | independent items each needing verify | fork + audit | per-item implement→verify (`pipeline`) |
+  | dependency chain (B needs A's output) | sequential batches | sequential `await`s — barrier between steps; NEVER `pipeline` |
+
+  **`pipeline()` is NOT for dependency chains.** It runs *items* concurrently
+  (only the stages within ONE item are ordered), so feeding a dependency chain to
+  `pipeline` reintroduces the stale-read bug forbidden above — chunk B reads
+  files chunk A is still writing. `pipeline` is a per-item *implement→verify*
+  lifecycle for **independent** items (a verification upgrade over plain
+  fan-out). A genuine cross-chunk dependency stays sequential: `await agent(A)`
+  then `await agent(B)`, or the executor keeps owning the sequencing.
+
+  Direct execution and "executor owns tightly-coupled work" are identical in both
+  modes — workflow mode only changes the *delegated* path. The recipe lives in
+  `3t-reference.md` → DYNAMIC WORKFLOW COORDINATION.
+
+---
+
+## DYNAMIC WORKFLOW DELEGATION
+
+Active ONLY when `.claude/.3t-workflows` = `enabled`. When off, ignore this
+section entirely.
+
+**Authorization.** This skill-loaded protocol authorizes you to call the
+`Workflow` tool for implementor delegation *only when the flag is enabled*. With
+the flag off or absent, do NOT call `Workflow` — use direct/fork as today.
+
+**What it changes.** When enabled, you route ALL delegated implementor work
+through a workflow (even a single discrete task, as a 1-agent workflow). The
+reason is the reliable return: a workflow runs the implementor under a
+structured-output schema, so its completion report is validated and CANNOT
+truncate — the failure mode the POST-DELEGATION AUDIT exists to compensate for.
+
+**Hard rules:**
+- **Announce every delegation.** Before launching, say one line:
+  "Delegating this batch via a workflow — N implementor(s)." Standing
+  authorization, but per-use visibility — never spawn silently.
+- **Haiku only.** Every implementor `agent()` call in the workflow pins
+  `model: 'haiku'`. `agent()` defaults to inheriting your (possibly larger)
+  session model — workflow implementors must never run on it.
+- **The audit still runs.** Schema makes the *report* reliable, not the *work*
+  complete. After the workflow returns you STILL independently re-run build/test
+  (POST-DELEGATION AUDIT below). Do not skip it because the report looks clean.
+- **Escalation is traded for reliable returns.** A workflow runs in the
+  background; you are not watching mid-run, so the inline ESCALATION
+  ownership-transfer handshake cannot operate. A blocker comes back as a
+  structured `escalation` flag in the schema, which you handle AFTER the workflow
+  completes — never mid-flight. Therefore delegated work must be well-specified
+  (Tech Lead Standard) and free of likely mid-run intervention; anything
+  tightly-coupled or escalation-prone you own directly, same as mode off.
+- **Shared-file writes still serialize.** INDEX.md / CONTEXT.md / registration
+  files go to ONE agent or are done by you post-reconcile — same rule as fork
+  mode. Use `isolation: 'worktree'` only when parallel agents would otherwise
+  collide on the same files.
+
 ---
 
 ## PRE-AGENT CHECKLIST — BLOCKING GATE
@@ -157,7 +228,12 @@ spawns concurrent implementors with no shared-file contention.
 Re-read this file (re-run `/claude-3t:3t-start`, which loads it from the plugin) at the
 top of this checklist. This ensures instructions survive context compaction.
 
-This checklist MUST appear as visible text before EVERY Agent tool call.
+This checklist MUST appear as visible text before EVERY Agent tool call. In
+workflow mode (`Workflow` instead of `Agent`), the same discipline applies
+**per spec inside the workflow** — run the checklist for each implementor spec
+you hand the script (Tech Lead Standard, ≤6-write budget, no tightly-coupled
+file, no stale read, cold rows, no raw content). The workflow does not exempt a
+spec from the gate; it just batches the launches.
 
 ```
 PRE-AGENT CHECKLIST
@@ -271,6 +347,12 @@ Delegate to claude-3t:implementor ONLY when ALL of these are true:
 Do NOT delegate sequential tightly-coupled work.
 Do NOT delegate tasks requiring only 1-2 tool calls.
 
+The implementor may be invoked three ways: directly, forked
+(`CLAUDE_CODE_FORK_SUBAGENT=1`), or — when workflow mode is enabled — as a
+workflow `agent({agentType: 'claude-3t:implementor', model: 'haiku', schema})`.
+All three run the same Haiku agent under the same contract; only the return
+format differs (free text vs schema-validated object).
+
 ---
 
 ## HALT HANDLING
@@ -286,6 +368,7 @@ When a subagent returns a HALT report:
 Show HALT report to user — never silently absorb it.
 Every HALT logged to MEMORY.md under Known Risks.
 A HALT does NOT transfer batch ownership. Only ESCALATION does.
+→ **Debrief trigger** — after resolving, prompt the user: "This session had a HALT. Run `/3t-debrief` now to capture the lesson, or continue and run it at the end?"
 
 **Soft-HALT recognition.** A freeform "progress note" the implementor returns
 after doing a lot of work — reading like a reminder-to-self rather than a clean
@@ -322,6 +405,7 @@ or re-delegate the remainder as a smaller batch (≤ ~6 writes, hard files
 isolated). Budget-by-effort reduces how often you hit the ceiling; THIS audit
 catches the times the estimate was wrong — it is the load-bearing safety net and
 does not depend on the implementor behaving.
+→ **Debrief trigger** — a failed audit (missing deliverable, broken build, partial file) is a debrief-worthy anomaly. Prompt the user after resolving: "Audit found issues. Run `/3t-debrief` now or at session end to capture the sizing/spec lesson?"
 
 ---
 
@@ -337,6 +421,8 @@ When Haiku escalates:
   > 5×  → Fix deficiency, re-invoke Haiku with a corrected prompt.
   2nd re-invocation on same batch → the executor handles unconditionally.
 
+→ **Debrief trigger** — any escalation is a debrief signal. After resolving, prompt: "Haiku escalated this task. Run `/3t-debrief` now or at session end to capture the spec/sizing lesson?"
+
 ---
 
 ## SPEC QUALITY FEEDBACK — MANDATORY WRITE
@@ -347,6 +433,32 @@ When Haiku reports "Spec quality: had gaps":
 → Write the lesson to EXECUTOR_MEMORY.md
 → If the lesson is durable and reusable across many sessions, also promote a
    reusable spec template into cold storage and add an INDEX row.
+→ **Debrief trigger** — prompt the user: "Haiku flagged spec gaps. Run `/3t-debrief` to capture what to ask for next time?"
+
+---
+
+## DEBRIEF TRIGGERS — PROMPT THE USER
+
+After ANY of the following anomalies, prompt the user to run `/3t-debrief` —
+either immediately or at session end. Do not wait silently; the user may not
+remember a rough moment by the end of a long session.
+
+Suggested prompt (adapt to context):
+> "[Anomaly] — worth a `/3t-debrief` to lock in the lesson now or at the end of
+> the session?"
+
+| Anomaly | Why it's debrief-worthy |
+|---|---|
+| HALT or ESCALATION from the implementor | Signals a spec/sizing/environment gap |
+| Soft-HALT (freeform progress note, not a clean report) | Runway exhaustion — sizing lesson |
+| Failed POST-DELEGATION AUDIT (missing file, broken build) | Spec or effort-budget miss |
+| Executor pickup (you finished work Haiku started or dropped) | Boundary/handoff lesson |
+| "Spec quality: had gaps" from the implementor | Direct spec-writing lesson |
+| Repeated assumption on same topic across multiple delegations | Missing standing context |
+| Any unexpected error that required > 1 retry | Possible gotcha for IMPLEMENTOR_MEMORY |
+
+Frequency: one prompt per anomaly type per session is enough — don't re-prompt
+for the same class of event if it recurs. If the user declines, don't nag.
 
 ---
 

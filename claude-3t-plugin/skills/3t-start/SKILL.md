@@ -101,6 +101,51 @@ if it doesn't, use the labeled in-context fallback.
 
 ---
 
+## STEP 4b — Delegation mode (per-developer, first run only)
+
+Workflow delegation is an opt-in **mode switch**: when enabled, the executor
+routes ALL delegated implementor work through dynamic workflows (the `Workflow`
+tool) instead of fork mode / single-implementor invokes, so every delegation
+returns a schema-validated report that cannot truncate. When disabled (default),
+delegation behaves exactly as today (direct + fork mode). See "DYNAMIC WORKFLOW
+DELEGATION" in `3t-core.md`. The choice is per-developer and stored in a
+gitignored flag.
+
+Read the stored preference:
+
+```bash
+test -f .claude/.3t-workflows && cat .claude/.3t-workflows
+```
+
+- **Flag present** → report state in ONE line and move on; do NOT re-prompt:
+  "Workflow delegation: enabled." or "Workflow delegation: off (direct + fork)."
+- **Flag absent (first run)** → offer the choice, do NOT block. Explain briefly:
+
+  ```
+  Optional: dynamic-workflow delegation. With it on, I route every delegated
+  implementor batch through a background workflow that returns a structured,
+  truncation-proof completion report — and can fan a large independent batch out
+  to a Haiku implementor pool. The tradeoff: a workflow runs in the background,
+  so I can't take over an escalation mid-run — a blocker comes back as a flag I
+  handle after the batch finishes. Off (default) keeps today's direct + fork
+  delegation. You can change this anytime by editing .claude/.3t-workflows.
+
+  Enable workflow delegation? (yes / no)
+  ```
+
+  Write the answer to the flag (`enabled` or `disabled`):
+
+  ```bash
+  printf 'enabled\n'  > .claude/.3t-workflows   # if yes
+  printf 'disabled\n' > .claude/.3t-workflows   # if no
+  ```
+
+Keep it cheap — no smoke-test in this routine path. Implementor agents spawned by
+a workflow always run as **Haiku** (the recipe pins `model: 'haiku'`); workflow
+delegation must never run an implementor on a larger model.
+
+---
+
 ## STEP 5 — Detect project state
 
 Scan for artifacts:
