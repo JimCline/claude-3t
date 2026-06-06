@@ -1,7 +1,10 @@
 # 3-Tier Core Protocol
 
-This file is re-read at every PRE-AGENT CHECKLIST gate.
-It contains everything the executor must have fresh before any agent invocation.
+This file loads ONCE per session (via `/claude-3t:3t-start`) and is restored
+after compaction by the SessionStart hook. Do NOT re-read this whole 23KB file
+per delegation — that is the per-turn token tax. Per-delegation, re-read only the
+compact `3t-gate.md` card. This file holds the full definitions the card points
+to; read an individual section on demand when the card's one-liner is not enough.
 
 ---
 
@@ -156,124 +159,49 @@ Before applying the fork/sequential rules above, check the delegation mode
 (per-developer flag `.claude/.3t-workflows`, set at `/3t-start` STEP 4b):
 
 - **Mode OFF (default)** → everything above is unchanged. Direct execution +
-  fork mode are the delegation path.
-- **Mode ON** → workflows become the delegation path. The SAME
-  independent-vs-dependent analysis still runs, but it now chooses the workflow
-  *shape* instead of fork-vs-single-invoke:
-
-  | Situation | Mode OFF | Mode ON |
-  |---|---|---|
-  | 1–2 tool calls | executor does it directly | executor does it directly |
-  | tightly-coupled / state-machine | executor owns it directly | executor owns it directly |
-  | single discrete delegated task | one implementor invoke | 1-agent workflow |
-  | independent batch | fork mode | fan-out workflow (`parallel`) |
-  | independent items each needing verify | fork + audit | per-item implement→verify (`pipeline`) |
-  | dependency chain (B needs A's output) | sequential batches | sequential `await`s — barrier between steps; NEVER `pipeline` |
-
-  **`pipeline()` is NOT for dependency chains.** It runs *items* concurrently
-  (only the stages within ONE item are ordered), so feeding a dependency chain to
-  `pipeline` reintroduces the stale-read bug forbidden above — chunk B reads
-  files chunk A is still writing. `pipeline` is a per-item *implement→verify*
-  lifecycle for **independent** items (a verification upgrade over plain
-  fan-out). A genuine cross-chunk dependency stays sequential: `await agent(A)`
-  then `await agent(B)`, or the executor keeps owning the sequencing.
-
-  Direct execution and "executor owns tightly-coupled work" are identical in both
-  modes — workflow mode only changes the *delegated* path. The recipe lives in
-  `3t-reference.md` → DYNAMIC WORKFLOW COORDINATION.
+  fork mode are the delegation path. The `Workflow` tool is NOT authorized.
+- **Mode ON** → workflows become the delegation path. Load the full protocol —
+  the mode-on shape table, delegation rules, coordination recipe, and completion
+  schema — from `3t-workflow-mode.md` (kept out of always-loaded core so an
+  off-by-default session does not pay for it). `/3t-start` STEP 4b loads it when
+  the flag reads `enabled`.
 
 ---
 
-## DYNAMIC WORKFLOW DELEGATION
+## DELEGATING RECON READS — KEEP BULK FILE CONTENT OUT OF YOUR CONTEXT
 
-Active ONLY when `.claude/.3t-workflows` = `enabled`. When off, ignore this
-section entirely.
+When you Read a file yourself, its full contents land in the expensive session
+model context and persist for the rest of the session. When the Haiku implementor
+reads it, the contents land in cheap, disposable subagent context and only the
+derived answer returns. So push read-and-report work down:
 
-**Authorization.** This skill-loaded protocol authorizes you to call the
-`Workflow` tool for implementor delegation *only when the flag is enabled*. With
-the flag off or absent, do NOT call `Workflow` — use direct/fork as today.
+- **"Read these files and tell me X"** (summarize, locate a symbol, extract the
+  signatures, answer a bounded question) → delegate to the implementor. You get
+  back the answer, not the bytes. This is a normal ≤6-write (often zero-write)
+  delegation — give it a tight spec naming the files and the exact question.
+- **"I need to understand this to decide how to delegate"** → read it yourself.
+  When the contents drive a *coordination* decision (how to split the batch,
+  whether a file is tightly-coupled, what the spec must say), you need them in
+  your own context. With a disciplined handoff this is the rare case.
 
-**What it changes.** When enabled, you route ALL delegated implementor work
-through a workflow (even a single discrete task, as a 1-agent workflow). The
-reason is the reliable return: a workflow runs the implementor under a
-structured-output schema, so its completion report is validated and CANNOT
-truncate — the failure mode the POST-DELEGATION AUDIT exists to compensate for.
-
-**Hard rules:**
-- **Announce every delegation.** Before launching, say one line:
-  "Delegating this batch via a workflow — N implementor(s)." Standing
-  authorization, but per-use visibility — never spawn silently.
-- **Haiku only.** Every implementor `agent()` call in the workflow pins
-  `model: 'haiku'`. `agent()` defaults to inheriting your (possibly larger)
-  session model — workflow implementors must never run on it.
-- **The audit still runs.** Schema makes the *report* reliable, not the *work*
-  complete. After the workflow returns you STILL independently re-run build/test
-  (POST-DELEGATION AUDIT below). Do not skip it because the report looks clean.
-- **Escalation is traded for reliable returns.** A workflow runs in the
-  background; you are not watching mid-run, so the inline ESCALATION
-  ownership-transfer handshake cannot operate. A blocker comes back as a
-  structured `escalation` flag in the schema, which you handle AFTER the workflow
-  completes — never mid-flight. Therefore delegated work must be well-specified
-  (Tech Lead Standard) and free of likely mid-run intervention; anything
-  tightly-coupled or escalation-prone you own directly, same as mode off.
-- **Shared-file writes still serialize.** INDEX.md / CONTEXT.md / registration
-  files go to ONE agent or are done by you post-reconcile — same rule as fork
-  mode. Use `isolation: 'worktree'` only when parallel agents would otherwise
-  collide on the same files.
+Rule of thumb: if the file's contents will leave your context as soon as you have
+the answer, they should never have entered it — send a Haiku recon read instead.
+Bulk file content in the executor window is a cost you pay every subsequent turn.
 
 ---
 
 ## PRE-AGENT CHECKLIST — BLOCKING GATE
 
-Re-read this file (re-run `/claude-3t:3t-start`, which loads it from the plugin) at the
-top of this checklist. This ensures instructions survive context compaction.
+The checklist itself, plus one-line reminders of every limit it enforces, lives
+in the compact `3t-gate.md` card. **Re-read `3t-gate.md` (NOT this whole file) at
+the top of every gate** — that is the per-delegation artifact, kept small so the
+re-read is cheap and survives compaction. The full limit definitions are the
+sections of this file (Tech Lead Standard, Handoff Contract, Spec Sizing,
+Extended Context Override); read one on demand if the card's one-liner is not
+enough.
 
-This checklist MUST appear as visible text before EVERY Agent tool call. In
-workflow mode (`Workflow` instead of `Agent`), the same discipline applies
-**per spec inside the workflow** — run the checklist for each implementor spec
-you hand the script (Tech Lead Standard, ≤6-write budget, no tightly-coupled
-file, no stale read, cold rows, no raw content). The workflow does not exempt a
-spec from the gate; it just batches the launches.
-
-```
-PRE-AGENT CHECKLIST
-─────────────────────────────────────────────────────
-[ ] 3t-core.md re-read ✓
-
-Target:  implementor
-─────────────────────────────────────────────────────
-[ ] Task spec satisfies the Tech Lead Standard
-    (Haiku-completable with zero follow-up questions)
-
-[ ] Write budget: spec implies ≤ ~6 file writes
-    Counted: [N]. If >6 → STOP and split: fork parallel if the
-    chunks are independent, else sequential batches.
-
-[ ] No tightly-coupled / state-machine file is being
-    delegated (own those directly): [confirmed | n-a]
-
-[ ] No file in this spec was edited by me AFTER the implementor
-    would have read it; any file I changed that it relies on has
-    its new state re-stated in the spec: [confirmed | n-a]
-
-[ ] If the spec introduces a side-effecting unit (DB/metric/IO),
-    it requires a test of the REAL side effect, not just stubs:
-    [confirmed | n-a]
-
-[ ] Cold index rows handed to the agent (or topics to scan)
-    Rows/topics: [list, or "none needed"]
-
-[ ] Prompt contains spec + file names only — NO raw file
-    contents or conversation history
-
-[ ] If raw content/history IS included → Extended Context Override
-    → User approval obtained: [yes/no/n-a]
-    → Logged to OVERRIDE_LOG.md: [yes/no/n-a]
-─────────────────────────────────────────────────────
-CHECKLIST COMPLETE — invoking implementor
-```
-
-If any box cannot be checked: STOP. Show which box failed. Resolve visibly.
+Same discipline in workflow mode: run the gate per implementor spec you hand the
+script — the workflow batches launches, it does not exempt a spec from the gate.
 
 ---
 
