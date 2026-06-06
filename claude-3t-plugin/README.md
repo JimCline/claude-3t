@@ -201,7 +201,10 @@ plugin tag` to cut a validated `claude-3t--vX.Y.Z` git tag for a real release.
 claude-3t-plugin/
 ├── .claude-plugin/plugin.json
 ├── hooks/{hooks.json, session-start.mjs}   # gated SessionStart anchor
-├── context/{3t-core,3t-reference}.md        # executor protocol (read by /claude-3t:3t-start)
+├── context/3t-core.md                       # executor protocol, loaded once/session
+├── context/3t-reference.md                  # occasional protocols (grill flow, fork mode, etc.)
+├── context/3t-gate.md                        # compact PRE-AGENT card — the only per-delegation re-read
+├── context/3t-workflow-mode.md              # workflow-delegation protocol, loaded on demand when enabled
 ├── skills/{3t-start,3t-init,3t-status,3t-checkpoint,3t-debrief,3t-leaving}/SKILL.md
 ├── agents/implementor.md                    # Haiku subagent
 └── templates/                               # blank project files /claude-3t:3t-init copies in

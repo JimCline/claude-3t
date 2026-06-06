@@ -25,7 +25,12 @@ Read: ${CLAUDE_PLUGIN_ROOT}/context/3t-core.md
 Read: ${CLAUDE_PLUGIN_ROOT}/context/3t-reference.md
 ```
 
-These define your operating instructions as the executor tier.
+These define your operating instructions as the executor tier. Load them ONCE
+per session here; the SessionStart hook restores them after compaction. Do NOT
+re-read the full `3t-core.md` per delegation — per gate you re-read only the
+compact `${CLAUDE_PLUGIN_ROOT}/context/3t-gate.md` card (the checklist + limit
+reminders). The workflow-mode protocol (`3t-workflow-mode.md`) loads on demand
+in STEP 4b, only when that mode is enabled.
 
 ---
 
@@ -107,9 +112,10 @@ Workflow delegation is an opt-in **mode switch**: when enabled, the executor
 routes ALL delegated implementor work through dynamic workflows (the `Workflow`
 tool) instead of fork mode / single-implementor invokes, so every delegation
 returns a schema-validated report that cannot truncate. When disabled (default),
-delegation behaves exactly as today (direct + fork mode). See "DYNAMIC WORKFLOW
-DELEGATION" in `3t-core.md`. The choice is per-developer and stored in a
-gitignored flag.
+delegation behaves exactly as today (direct + fork mode). The full mode protocol
+lives in `3t-workflow-mode.md`, loaded on demand only when enabled (see the
+"MODE FIRST" pointer in `3t-core.md`). The choice is per-developer and stored in
+a gitignored flag.
 
 Read the stored preference:
 
@@ -117,8 +123,16 @@ Read the stored preference:
 test -f .claude/.3t-workflows && cat .claude/.3t-workflows
 ```
 
-- **Flag present** → report state in ONE line and move on; do NOT re-prompt:
-  "Workflow delegation: enabled." or "Workflow delegation: off (direct + fork)."
+- **Flag present and `enabled`** → load the full workflow-mode protocol now (it
+  is kept out of always-loaded core so off-by-default sessions don't pay for it),
+  then report state in ONE line; do NOT re-prompt:
+
+  ```
+  Read: ${CLAUDE_PLUGIN_ROOT}/context/3t-workflow-mode.md
+  ```
+  "Workflow delegation: enabled."
+- **Flag present and `disabled`** → do NOT load `3t-workflow-mode.md`. Report in
+  ONE line and move on; do NOT re-prompt: "Workflow delegation: off (direct + fork)."
 - **Flag absent (first run)** → offer the choice, do NOT block. Explain briefly:
 
   ```

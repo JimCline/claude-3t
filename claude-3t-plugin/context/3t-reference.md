@@ -71,83 +71,11 @@ Mandatory order:
 
 ## DYNAMIC WORKFLOW COORDINATION
 
-Use ONLY when `.claude/.3t-workflows` = `enabled` (see DYNAMIC WORKFLOW
-DELEGATION in 3t-core.md). When enabled, this REPLACES fork mode / single-invoke
-as the delegation path. The win is a schema-validated, truncation-proof return.
-
-Each implementor `agent()` call MUST set `agentType: 'claude-3t:implementor'`,
-`model: 'haiku'` (never inherit the session model), and `schema:
-COMPLETION_SCHEMA`. Announce the delegation first ("Delegating via a workflow —
-N implementor(s)").
-
-Pick the shape from the mode-on table in 3t-core.md:
-- **single task** → one `agent()` call.
-- **independent batch** → `parallel(specs.map(s => () => agent(s, {...})))`.
-- **independent items each needing verify** → `pipeline(items, implement, verify)`
-  — a *per-item* implement→verify lifecycle. NOTE: `pipeline` runs items
-  concurrently; it is for INDEPENDENT items only, not for ordering dependent work.
-- **dependency chain (B needs A's output)** → sequential awaits with a barrier:
-  `const a = await agent(specA, {...}); const b = await agent(specB(a), {...});`
-  — NEVER `pipeline`, which would run A and B concurrently and stale-read.
-
-Canonical fan-out:
-
-```js
-const COMPLETION_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    done:            { type: 'string' },                 // one sentence
-    filesChanged:    { type: 'array', items: { type: 'string' } },
-    tests:           { type: 'string' },                 // "N passed / N failed | none in scope"
-    coldIndexUpdated:{ type: 'string' },                 // "yes — rows … | n/a"
-    assumptions:     { type: 'array', items: { type: 'string' } },
-    missingContext:  { type: 'array', items: { type: 'string' } },
-    alsoNoticed:     { type: 'array', items: { type: 'string' } },
-    specQuality:     { type: 'string', enum: ['sufficient', 'had gaps'] },
-    specGaps:        { type: 'array', items: { type: 'string' } },
-    // exit-checklist items as booleans (free-text checklist → schema flags):
-    noUnsolicitedGit:{ type: 'boolean' },
-    onlySpecFiles:   { type: 'boolean' },
-    // inline escalation is unavailable in a workflow — surface it structurally:
-    escalation: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        status:    { type: 'string', enum: ['none', 'halt', 'escalated', 'partial'] },
-        reason:    { type: 'string' },
-        safeState: { type: 'string' },   // what is done and safe to keep
-        remaining: { type: 'string' },   // work not done, in suggested order
-      },
-      required: ['status'],
-    },
-  },
-  required: ['done', 'filesChanged', 'tests', 'specQuality', 'escalation'],
-}
-
-const specs = [ /* ≤6-write spec strings, each passing the PRE-AGENT CHECKLIST */ ]
-const results = await parallel(
-  specs.map(s => () =>
-    agent(s, { agentType: 'claude-3t:implementor', model: 'haiku', schema: COMPLETION_SCHEMA }))
-)
-return results.filter(Boolean)
-```
-
-Mandatory order AFTER the workflow returns (the executor does this, not the
-script):
-1. **Reconcile** — show a summary of every result; surface conflicts.
-2. **Handle escalation flags** — any result with `escalation.status !== 'none'`
-   is dealt with NOW (finish it yourself or re-delegate a smaller batch). This is
-   the post-completion substitute for inline escalation.
-3. **POST-DELEGATION AUDIT** — independently re-run build/test yourself
-   (3t-core.md). The schema guarantees the report arrived intact; it does NOT
-   guarantee the work is complete.
-4. **Memory writes** — `specQuality: 'had gaps'` → EXECUTOR_MEMORY.md (mandatory);
-   durable findings → MEMORY.md / cold storage + INDEX row.
-
-Shared-file writes (INDEX.md, CONTEXT.md, registrations) are never split across
-parallel agents — route them to one agent or do them yourself at reconcile. Use
-`isolation: 'worktree'` only if parallel agents would otherwise collide on files.
+The full workflow-mode protocol — shape table, delegation rules, the coordination
+recipe, the completion schema, and the post-return order — now lives in its own
+on-demand file, `3t-workflow-mode.md`, loaded ONLY when `.claude/.3t-workflows` =
+`enabled`. A default (mode-off) session never loads it. See `/3t-start` STEP 4b
+and the "MODE FIRST" pointer in `3t-core.md`.
 
 ---
 
