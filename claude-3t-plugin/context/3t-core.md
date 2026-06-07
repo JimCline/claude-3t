@@ -192,16 +192,18 @@ Bulk file content in the executor window is a cost you pay every subsequent turn
 
 ## PRE-AGENT CHECKLIST — BLOCKING GATE
 
-The checklist itself, plus one-line reminders of every limit it enforces, lives
-in the compact `3t-gate.md` card. **Re-read `3t-gate.md` (NOT this whole file) at
-the top of every gate** — that is the per-delegation artifact, kept small so the
-re-read is cheap and survives compaction. The full limit definitions are the
-sections of this file (Tech Lead Standard, Handoff Contract, Spec Sizing,
-Extended Context Override); read one on demand if the card's one-liner is not
-enough.
+The checklist lives in exactly ONE place — the `3t-gate.md` card — and the
+`pre-agent.mjs` hook **injects it automatically at every implementor delegation**.
+So you do NOT manually re-read the card per gate (that per-delegation re-read is
+gone); when the hook delivers the boxes, show them as visible text and confirm
+each before the call proceeds. Consult the card's limit-reminders directly only
+when *shaping* a spec; the full limit definitions are the sections of this file
+(Tech Lead Standard, Handoff Contract, Spec Sizing, Extended Context Override).
 
 Same discipline in workflow mode: run the gate per implementor spec you hand the
 script — the workflow batches launches, it does not exempt a spec from the gate.
+(The hook fires on the top-level `Workflow` launch, not per in-workflow spec, so
+in workflow mode the per-spec discipline is yours to apply.)
 
 ---
 
@@ -323,6 +325,11 @@ the executor independently verifies the work — never on the report alone:
    rejects a wrong-scoped duplicate; failing tests reveal missing code. This is
    the only check that catches a file that EXISTS but is wrong (e.g. a class
    written in the wrong scope that a formatter then duplicated).
+   *Opt-in shortcut:* if the project has a `.claude/.3t-verify` file (one shell
+   command, e.g. `npm test -s`), the `post-agent.mjs` hook runs it automatically
+   on every implementor return and injects a PASS/FAIL summary — you read the
+   result instead of spending a tool call. It still only covers what that one
+   command checks; re-run targeted tests if the delegation's scope is wider.
 3. **Read before you rebuild on it.** If the return was partial or truncated,
    **Read each touched file before re-doing or building on that work.** Do NOT
    layer a correct version on top of a partial one — that is what produces

@@ -18,9 +18,38 @@
 // the checklist at the gate is a large step up from honor-system prose.
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+// Plugin root, derived from this hook's own location (hooks/pre-agent.mjs → ..),
+// so the SINGLE-SOURCE gate card can be read regardless of how the hook is invoked.
+const PLUGIN_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// SINGLE SOURCE OF THE CHECKLIST. The PRE-AGENT CHECKLIST text lives in exactly
+// one place — context/3t-gate.md — and this hook delivers it at the delegation
+// moment. The executor no longer re-reads the card every gate (that 866-token
+// re-read is gone); the hook injects it instead. Keeping the boxes here AND in
+// the card would be a DRY hazard, so we read them from the card and fall back to
+// a minimal inline reminder only if the file cannot be read.
+function gateChecklist() {
+  try {
+    const card = readFileSync(join(PLUGIN_ROOT, "context", "3t-gate.md"), "utf8");
+    // Pull the fenced block whose first line is the checklist banner.
+    const m = card.match(/```[^\n]*\n(PRE-AGENT CHECKLIST[\s\S]*?)```/);
+    if (m) return m[1].trimEnd();
+  } catch {
+    /* fall through to the inline backstop */
+  }
+  return `PRE-AGENT CHECKLIST (card unreadable — minimal backstop)
+[ ] Tech Lead Standard met (Haiku-completable, zero follow-ups)
+[ ] ≤ ~6 file writes (count; split if more)
+[ ] No tightly-coupled/state-machine file delegated
+[ ] No stale read (files you edited after the implementor would read them)
+[ ] Side-effecting unit → real side-effect test, not stubs
+[ ] Cold index rows handed over (or topics to scan)
+[ ] Spec + file names only — NO raw file contents/history`;
+}
 const MARKER = join(projectDir, ".claude", "context", "cold", "INDEX.md");
 const FLAG = join(projectDir, ".claude", ".3t-active");
 const DISABLED = join(projectDir, ".claude", ".3t-disabled");
@@ -104,19 +133,11 @@ process.stdout.write(
       hookEventName: "PreToolUse",
       additionalContext: `# PRE-AGENT CHECKLIST — required before this implementor delegation
 
-You are about to delegate to claude-3t:implementor. Per 3t-core.md, the completed
-PRE-AGENT CHECKLIST must appear as visible text BEFORE this call. If you have not
-just shown it, stop and show it now, confirming each box:
+You are about to delegate to claude-3t:implementor. The completed checklist must
+appear as visible text BEFORE this call. You do NOT need to re-read 3t-gate.md —
+its checklist is delivered here. If you have not just shown it, confirm each box now:
 
-[ ] 3t-core.md re-read ✓
-[ ] Task spec satisfies the Tech Lead Standard (Haiku-completable, zero follow-ups)
-[ ] Write budget ≤ ~6 files (count them) — if more, split into batches
-[ ] No tightly-coupled / state-machine file delegated (own those directly)
-[ ] No file edited by you AFTER the implementor would read it (or its new state re-stated)
-[ ] Side-effecting unit? spec requires a REAL side-effect test, not just stubs
-[ ] Cold index rows handed to the agent (or topics to scan) — list or "none needed"
-[ ] Prompt is spec + file names only — NO raw file contents or conversation history
-[ ] If raw content/history IS included → Extended Context Override approved + logged
+${gateChecklist()}
 
 If any box fails: STOP, show which, resolve visibly, then re-delegate.`,
     },

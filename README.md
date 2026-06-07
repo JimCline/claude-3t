@@ -137,6 +137,28 @@ needs. This keeps the executor lean and is parallel-safe.
 
 ---
 
+## Token economics & built-in tooling
+
+The architecture is built to keep the executor's context lean — pointers in,
+results out, file bodies handled by the cheap implementor tier. Three pieces of
+that are operator-visible:
+
+- **Auto-verify (`.claude/.3t-verify`, opt-in).** Drop one shell command into this
+  file (e.g. `npm test -s` or `dotnet build`). After every implementor delegation,
+  the `post-agent.mjs` hook runs it and injects a PASS/FAIL summary, so the
+  executor reads the result instead of spending a tool call on the
+  post-delegation build/test. Runs synchronously with a 120s timeout — keep the
+  command fast. Absent file → behaviour is unchanged (advisory reminder only).
+- **`bin/session-probe.mjs`.** One deterministic scan (advisor model, workflow
+  flag, project-state artifacts, git history) that `/3t-start` runs in a single
+  call instead of ~8 separate shell round-trips.
+- **`bin/token-baseline.mjs`.** A static estimate (~4 chars/token) of what every
+  context artifact costs — protocol files, hot memory, and each hook injection —
+  so optimizations are judged by a measured before/after delta, not intuition.
+  Run it from the plugin dir: `node bin/token-baseline.mjs [project-path]`.
+
+---
+
 ## Optional companion resources
 
 These are independent tools that pair well with the workflow but are not part of
