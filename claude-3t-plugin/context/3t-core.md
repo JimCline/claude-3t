@@ -118,7 +118,13 @@ Size and sequence every batch:
   not expensive executor context. Delegate even if the nominal write count is ≤ 2
   (this overrides the 1-2-tool-call exception). Give the spec a build-must-pass
   acceptance criterion and tell the implementor to check the package
-  README/changelog before assuming prior-version API patterns.
+  README/changelog before assuming prior-version API patterns. In **workflow mode**,
+  this same unpredictability can exhaust the implementor's turn budget before it
+  calls `StructuredOutput`, surfacing as a workflow failure even when the build
+  passes — do NOT pull the work back into your own context to avoid that (owning it
+  reintroduces the expensive-iteration problem this bullet exists to prevent).
+  Keep delegating; the SOFT-HALT audit in `3t-workflow-mode.md` recovers the
+  already-written work.
 - **Order items for drop-resilience.** A truncated return loses the LAST spec
   items first. Put cheap, must-not-drop items (docs, AC updates, an issue file)
   FIRST or in their own batch — never last behind a high-iteration file.
