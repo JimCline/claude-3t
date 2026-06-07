@@ -13,6 +13,10 @@
 // structure. Use it to answer "what's here / where is X"; fall back to a real
 // read only when the BODY of a specific unit actually matters.
 //
+// Per-language patterns live in ./codemap-langs/<lang>.mjs and are imported ON
+// DEMAND — only the languages present in the target set are loaded, so a JS-only
+// run never parses the Python/Go/Rust/etc. patterns.
+//
 // Usage:
 //   node bin/codemap.mjs <file|dir> [more...]   # map files / recurse dirs
 //   node bin/codemap.mjs --measure <dir>        # also print tokens-saved vs full read
@@ -20,66 +24,47 @@
 // Output per file: a path header, then `Lnnn  kind  name` lines. Compact and
 // deterministic — same input, same output (safe to cache / diff).
 //
-// EXPERIMENT RESULT (measured with --measure, ~4 chars/token):
-//   Python  honcho/src         119 files  324,869 → 11,997 tok   (4%)
-//   TS      honcho/mcp/src       9 files   11,178 →    274 tok   (2%)
-// Verdict: PASS on declaration-rich code — a real read costs 25–50× the codemap
-// for the same orientation. CAVEAT: on imperative script files with few
-// declarations (e.g. these hooks) the map is nearly empty — it is small because
-// there is little structure to extract, not because it distilled well. Use it for
+// EXPERIMENT RESULT — all 7 languages validated against real repos (--measure):
+//   TS      honcho/mcp/src         9 files   11,178 →    274 tok   (2%)
+//   Python  honcho/src           119 files  324,869 → 11,997 tok   (4%)
+//   Go      flatted/golang                                          (5%)
+//   Rust    byteorder/src                                           (5%)
+//   Ruby    homebrew/cmd                                            (6%)
+//   C#      clitimer/CliTimer                                       (8%)
+//   Java    msgpack jruby ext                                      (11%)
+// Verdict: PASS everywhere — a real read costs 9–50× the codemap for the same
+// orientation. Validation also caught + fixed real pattern bugs (JS captured
+// keywords as names; C# matched `else if (` as a method) before shipping.
+// CAVEAT: on imperative script files with few declarations (e.g. these hooks, or
+// a top-level Ruby script) the map is nearly empty — small because there is
+// little structure to extract, not because it distilled well. Use it for
 // "what's defined / where is X" on real modules; read bodies when they matter.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, extname, relative } from "node:path";
+import { join, extname, relative, dirname } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const tok = (s) => Math.round(s.length / 4);
 
-// Per-extension declaration patterns. Each entry: [kind, regex with one capture].
-// Patterns are intentionally line-oriented and conservative — better to miss an
-// exotic declaration than to emit noise. Order matters only for labeling.
-const LANGS = {
-  // Order matters: the first matching pattern wins (one symbol per line), so the
-  // specific declared kinds come before the generic method matcher.
-  js: [
-    ["type", /^\s*(?:export\s+)?(?:declare\s+)?(?:interface|type|enum)\s+([A-Za-z0-9_$]+)/],
-    ["class", /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z0-9_$]+)/],
-    ["func", /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\*?\s+([A-Za-z0-9_$]+)/],
-    ["const-fn", /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?\(?[^=]*\)?\s*=>/],
-    ["re-export", /^\s*export\s+(?:default\s+([A-Za-z0-9_$]+)|\{)/],
-    // Method: an indented `name(...) {` that is NOT a control-flow keyword.
-    ["method", /^\s{2,}(?:public\s+|private\s+|protected\s+|readonly\s+|async\s+|static\s+|get\s+|set\s+|\*)*(?!(?:if|for|while|switch|catch|return|do|else|function|await|typeof|new|throw|yield|with)\b)([A-Za-z0-9_$]+)\s*\([^)]*\)\s*[:{]/],
-  ],
-  py: [
-    ["class", /^\s*class\s+([A-Za-z0-9_]+)/],
-    ["def", /^\s*(?:async\s+)?def\s+([A-Za-z0-9_]+)/],
-  ],
-  go: [
-    ["func", /^\s*func\s+(?:\([^)]*\)\s*)?([A-Za-z0-9_]+)/],
-    ["type", /^\s*type\s+([A-Za-z0-9_]+)/],
-  ],
-  rs: [
-    ["fn", /^\s*(?:pub\s+)?(?:async\s+)?fn\s+([A-Za-z0-9_]+)/],
-    ["type", /^\s*(?:pub\s+)?(?:struct|enum|trait)\s+([A-Za-z0-9_]+)/],
-    ["impl", /^\s*impl(?:\s*<[^>]*>)?\s+([A-Za-z0-9_:<>]+)/],
-  ],
-  cs: [
-    ["type", /^\s*(?:public|private|internal|protected|abstract|sealed|static|partial|\s)*(?:class|interface|struct|enum|record)\s+([A-Za-z0-9_<>]+)/],
-    ["method", /^\s*(?:public|private|internal|protected|static|virtual|override|async|\s)+[A-Za-z0-9_<>\[\],.?]+\s+([A-Za-z0-9_]+)\s*\(/],
-  ],
-  java: [
-    ["type", /^\s*(?:public|private|protected|abstract|final|static|\s)*(?:class|interface|enum|record)\s+([A-Za-z0-9_<>]+)/],
-    ["method", /^\s*(?:public|private|protected|static|final|synchronized|abstract|\s)+[A-Za-z0-9_<>\[\],.?]+\s+([A-Za-z0-9_]+)\s*\(/],
-  ],
-  rb: [
-    ["class", /^\s*(?:class|module)\s+([A-Za-z0-9_:]+)/],
-    ["def", /^\s*def\s+([A-Za-z0-9_.?!]+)/],
-  ],
-};
-
+// Per-language declaration patterns live in ./codemap-langs/<lang>.mjs and are
+// loaded ON DEMAND — only the languages actually present in the target file set
+// are imported, so a JS-only run never parses the Python/Go/Rust/etc. patterns.
+// Each module default-exports [[kind, regex], ...]; first match per line wins, so
+// specific declared kinds precede the generic method matcher.
 const EXT_MAP = {
   ".js": "js", ".mjs": "js", ".cjs": "js", ".jsx": "js", ".ts": "js", ".tsx": "js",
   ".py": "py", ".go": "go", ".rs": "rs", ".cs": "cs", ".java": "java", ".rb": "rb",
 };
+
+const LANGS_DIR = join(dirname(fileURLToPath(import.meta.url)), "codemap-langs");
+const _patternCache = new Map();
+async function patternsFor(lang) {
+  if (!_patternCache.has(lang)) {
+    const mod = await import(pathToFileURL(join(LANGS_DIR, `${lang}.mjs`)).href);
+    _patternCache.set(lang, mod.default);
+  }
+  return _patternCache.get(lang);
+}
 
 const SKIP_DIR = new Set(["node_modules", ".git", "dist", "build", "bin", "obj", "target", ".next", "vendor"]);
 
@@ -98,9 +83,7 @@ function* walk(path) {
   }
 }
 
-function mapFile(path) {
-  const lang = EXT_MAP[extname(path)];
-  const patterns = LANGS[lang];
+function mapFile(path, patterns) {
   let src;
   try {
     src = readFileSync(path, "utf8");
@@ -143,7 +126,8 @@ const chunks = [];
 
 for (const t of targets) {
   for (const file of walk(t)) {
-    const r = mapFile(file);
+    const patterns = await patternsFor(EXT_MAP[extname(file)]);
+    const r = mapFile(file, patterns);
     if (!r) continue;
     fileCount++;
     totalFileTokens += r.fileTokens;
