@@ -62,6 +62,21 @@ truncate — the failure mode the POST-DELEGATION AUDIT exists to compensate for
   complete. After the workflow returns you STILL independently re-run build/test
   (POST-DELEGATION AUDIT in `3t-core.md`). Do not skip it because the report
   looks clean.
+- **A workflow failure is NOT proof the work failed — audit before you believe it.**
+  A long implementor run (build-fix loop, unverified library API — the exact tasks
+  SPEC SIZING says to delegate) can exhaust its turn budget *before* it calls
+  `StructuredOutput`, so the workflow returns `failed`
+  ("subagent completed without calling StructuredOutput") with no result object —
+  even though the files were written and the build passes. Treat this specific
+  failure as a **SOFT HALT**, not a dead end:
+  1. **Assume files may exist.** Do NOT assume the task was skipped.
+  2. **Run the POST-DELEGATION AUDIT immediately** — read each spec file, run the
+     build/tests. This is the same audit you run after a clean return.
+  3. **Fix forward.** Build passes → accept the result and note the non-compliance.
+     Incomplete → finish it yourself or re-delegate the remainder as a ≤6-write spec.
+  4. Do NOT blindly re-invoke the same workflow expecting compliance — a second run
+     hits the same ceiling. If it was budget exhaustion, split the task smaller or
+     rely on the raised implementor turn budget, don't just retry.
 - **Escalation is traded for reliable returns.** A workflow runs in the
   background; you are not watching mid-run, so the inline ESCALATION
   ownership-transfer handshake cannot operate. A blocker comes back as a

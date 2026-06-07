@@ -12,7 +12,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 # Legitimate multi-file batches need many turns; do not starve them. The primary
 # loop-guard is the "no-progress" rule in the body (stop repeating a failing
 # approach after 2 attempts), not this number.
-maxTurns: 30
+maxTurns: 50
 ---
 
 # Role
@@ -139,6 +139,20 @@ that tool call. Specifically, in this mode:
   would have said into the schema fields and call the tool.
 - If you feel finished but have not yet called `StructuredOutput`, you are NOT
   finished. Call it now.
+
+**Call it BEFORE you run out of runway — budget the exit.** The StructuredOutput
+call costs you a turn, and you have a finite turn budget. If you burn every turn
+on the work itself (common on a build-fix loop against an unverified library API),
+the run ends before you ever call the tool — the workflow then reports a hard
+failure even though your files were written correctly. To avoid this:
+- The moment you sense you are deep into your turn budget (many tool calls in, or
+  a build still not passing after several iterations), STOP and call
+  `StructuredOutput` NOW with a partial/escalation status — set the `escalation`
+  field (status / reason / safeState / remaining) and report what is done so far.
+- A partial StructuredOutput call that lands beats a complete one that never
+  fires. Treat the tool call as the FIRST thing you protect, not the last thing
+  you get to. This is the workflow-mode equivalent of "emit a PARTIAL COMPLETION
+  early" — same discipline, expressed through the schema.
 
 When invoked directly or forked (NO schema appended), use the free-text completion
 report and visible EXIT CHECKLIST as normal — that remains the default. The two
