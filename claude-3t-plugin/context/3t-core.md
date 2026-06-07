@@ -369,6 +369,20 @@ yourself or re-delegate the remainder as a smaller batch (≤ ~6 writes). The
 PARTIAL COMPLETION report (in the implementor's contract) is the structured form
 of this; a freeform note is the unstructured form and gets the same handling.
 
+**Act on the `Remaining split` hint — this is the implementor shedding load to
+you.** An implementor cannot allocate helpers itself; a PARTIAL COMPLETION is how
+it hands overload back for you to redistribute. Read its `Remaining split` field
+and re-delegate accordingly:
+- **PARALLEL** (disjoint write sets, no ordering dep) → fan the remaining chunks
+  out to several implementors at once via FORK MODE — do not grind through them
+  serially. This is the fast path the signal exists to enable.
+- **SEQUENTIAL** (dependency chain) → run the remainder as ordered batches, one at
+  a time; honor the stated dependencies.
+- **SINGLE** → re-delegate the one suggested ≤6-write slice.
+Always audit the Completed work first (it may have written files), then dispatch
+the remainder. An early PARTIAL with a PARALLEL split is the cheapest outcome —
+treat it as a normal, healthy handoff, not a failure.
+
 ---
 
 ## POST-DELEGATION AUDIT — DO NOT TRUST THE REPORT
