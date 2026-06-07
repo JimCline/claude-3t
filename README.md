@@ -140,7 +140,7 @@ needs. This keeps the executor lean and is parallel-safe.
 ## Token economics & built-in tooling
 
 The architecture is built to keep the executor's context lean — pointers in,
-results out, file bodies handled by the cheap implementor tier. Three pieces of
+results out, file bodies handled by the cheap implementor tier. Four pieces of
 that are operator-visible:
 
 - **Auto-verify (`.claude/.3t-verify`, opt-in).** Drop one shell command into this
@@ -156,6 +156,12 @@ that are operator-visible:
   context artifact costs — protocol files, hot memory, and each hook injection —
   so optimizations are judged by a measured before/after delta, not intuition.
   Run it from the plugin dir: `node bin/token-baseline.mjs [project-path]`.
+- **Transient-output policy** (protocol guidance, no tooling). The executor
+  summarizes read-once output (build/test/search/logs) at the source rather than
+  holding it raw — but **all MCP output and any canonical/reference content are
+  kept verbatim**, never compressed. Works with or without context-mode (which, if
+  installed, auto-compresses general Bash/WebFetch/Read output but leaves MCP
+  results untouched). See "TRANSIENT TOOL OUTPUT" in `claude-3t-plugin/context/3t-core.md`.
 
 ---
 
