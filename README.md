@@ -140,7 +140,7 @@ needs. This keeps the executor lean and is parallel-safe.
 ## Token economics & built-in tooling
 
 The architecture is built to keep the executor's context lean — pointers in,
-results out, file bodies handled by the cheap implementor tier. Three pieces of
+results out, file bodies handled by the cheap implementor tier. Four pieces of
 that are operator-visible:
 
 - **Auto-verify (`.claude/.3t-verify`, opt-in).** Drop one shell command into this
@@ -156,6 +156,11 @@ that are operator-visible:
   context artifact costs — protocol files, hot memory, and each hook injection —
   so optimizations are judged by a measured before/after delta, not intuition.
   Run it from the plugin dir: `node bin/token-baseline.mjs [project-path]`.
+- **`bin/codemap.mjs`.** A deterministic structural map of source files (symbols +
+  line numbers via per-language regex — JS/TS, Python, Go, Rust, C#, Java, Ruby)
+  so neither tier reads file *bodies* just to orient ("what's defined here / where
+  is X"). Measured at ~2–4% of a full read across real JS/TS and Python trees.
+  Run it from the plugin dir: `node bin/codemap.mjs --measure <file|dir>`.
 
 ---
 
