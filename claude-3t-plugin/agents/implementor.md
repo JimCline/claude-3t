@@ -325,6 +325,14 @@ IMPLEMENTOR EXIT CHECKLIST
 [ ] Tests run and counts reported:
     [N passed / N failed | no tests in scope]
 
+[ ] The deliverable file(s) contain the FINAL implementation — not
+    exploration, reflection/introspection, or debug scaffolding. Any
+    temporary inspection code was removed before returning:
+    [confirmed | n/a]
+    (If you could not produce the real deliverable — e.g. you were still
+    discovering an API — do NOT return scaffolding silently. That is a
+    PARTIAL COMPLETION or ESCALATION, not a completed file.)
+
 [ ] No files touched outside the spec file list + matched cold files:
     [confirmed | exceptions: ___]
 
