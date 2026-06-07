@@ -44,10 +44,13 @@ loads. Both must be yes for the protocol to engage.
                 # plants the activation marker. Restart Claude afterward.
 /claude-3t:3t-start       # begin/resume a session — loads protocol + hot memory
 /claude-3t:3t-status      # memory state, cold index, model status, compliance
+/claude-3t:3t-tokens      # measured session token usage by category / exchange
 /claude-3t:3t-checkpoint  # write a session snapshot now
 /claude-3t:3t-debrief     # post-work debrief — route lessons to memory / upstream
+/claude-3t:3t-feedback    # capture ONLY baseline-protocol gaps for upstream
 /claude-3t:3t-leaving     # departure protocol for autonomous work
 /claude-3t:3t-remove      # deactivate or fully remove 3t from this project
+/claude-3t:3t-reset       # wipe 3t to zero so /3t-init can run from scratch
 ```
 
 Delegate implementation to `claude-3t:implementor`. Hard/irreversible design
@@ -157,6 +160,9 @@ The plugin has a built-in feedback loop:
    escalation, spec gap, audit failure), run `/claude-3t:3t-debrief`. It routes
    project-specific lessons to that project's memory files and writes
    *protocol-level* gaps to `.claude/context/3t-plugin-feedback.md`.
+   If you only want to capture a baseline-protocol gap (nothing project-local),
+   run `/claude-3t:3t-feedback` instead — it does just that one thing and writes
+   the same file in the format step 2 expects.
 
 2. **File** — for each entry in `3t-plugin-feedback.md` that belongs in the
    plugin itself (not just your project), open a GitHub issue on
@@ -208,7 +214,7 @@ claude-3t-plugin/
 ├── context/3t-reference.md                  # occasional protocols (grill flow, fork mode, etc.)
 ├── context/3t-gate.md                        # PRE-AGENT checklist — single source; pre-agent.mjs injects it
 ├── context/3t-workflow-mode.md              # workflow-delegation protocol, loaded on demand when enabled
-├── skills/{3t-start,3t-init,3t-status,3t-checkpoint,3t-debrief,3t-leaving}/SKILL.md
+├── skills/{3t-start,3t-init,3t-status,3t-tokens,3t-checkpoint,3t-debrief,3t-feedback,3t-leaving,3t-remove,3t-reset}/SKILL.md
 ├── agents/implementor.md                    # Haiku subagent
 └── templates/                               # blank project files /claude-3t:3t-init copies in
 ```
