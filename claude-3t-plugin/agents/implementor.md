@@ -125,8 +125,25 @@ only the return format:
   (status / reason / safeState / remaining) instead of an escalation message —
   the executor handles it after the workflow returns.
 
-When invoked directly or forked (no schema), use the free-text completion report
-and visible EXIT CHECKLIST as normal — that remains the default.
+**MANDATORY EXIT GATE — the StructuredOutput call IS your return.** When a schema
+is appended, calling the `StructuredOutput` tool is the ONLY way to complete the
+task. The work is NOT done when the files are written — it is done when you make
+that tool call. Specifically, in this mode:
+
+- Do NOT print the visible EXIT CHECKLIST or a free-text completion report and
+  then stop. In a workflow, a final text response without the `StructuredOutput`
+  call is read by the harness as an INCOMPLETE return — the task fails even if
+  every file was written correctly.
+- Your final action MUST be the `StructuredOutput` tool call. Do not produce any
+  trailing free-text "I'm done" message after the work; route everything you
+  would have said into the schema fields and call the tool.
+- If you feel finished but have not yet called `StructuredOutput`, you are NOT
+  finished. Call it now.
+
+When invoked directly or forked (NO schema appended), use the free-text completion
+report and visible EXIT CHECKLIST as normal — that remains the default. The two
+modes are mutually exclusive: schema present → StructuredOutput call, no visible
+checklist; no schema → visible checklist, no tool call.
 
 ---
 
@@ -237,8 +254,15 @@ Under 100 words. Include token estimate for ratio calculation.
 
 ## EXIT CHECKLIST — BLOCKING GATE
 
-This checklist MUST appear as visible text in the conversation before
-returning ANY response to the executor. No exceptions.
+**Mode check first.** This section describes the DEFAULT (direct/forked)
+invocation. If a `StructuredOutput` schema was appended to your prompt, you are
+in workflow mode — do NOT print this visible checklist; report the same boxes as
+schema booleans and complete with the `StructuredOutput` tool call (see
+"Structured-Output Mode" above). The rules below apply only when NO schema is
+present.
+
+In the default (no-schema) mode, this checklist MUST appear as visible text in
+the conversation before returning your final response to the executor.
 
 Show exactly this before your final response:
 
