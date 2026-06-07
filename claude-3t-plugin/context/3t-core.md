@@ -190,6 +190,45 @@ Bulk file content in the executor window is a cost you pay every subsequent turn
 
 ---
 
+## TRANSIENT TOOL OUTPUT — SUMMARIZE, DON'T HOLD
+
+Build logs, test runs, `git log`, search/grep dumps, dependency trees — output you
+read ONCE to learn a result, then never reference again — should not sit raw in
+your context for the rest of the session. Reduce it at the source.
+
+**The hard line: this applies ONLY to transient, non-MCP output.** Two carve-outs
+that are NEVER compressed, because the model must reproduce or reason over them
+exactly:
+- **Anything you must reproduce verbatim** — source code you're about to edit,
+  canonical API signatures, idioms, schema/boilerplate templates.
+- **ALL MCP tool output.** Treat every MCP result as load-bearing reference and
+  keep it verbatim. You cannot reliably tell a disposable MCP payload from a
+  canonical one, so exclude the whole class. If a tool (e.g. context-mode) *nudges*
+  you to pipe a large MCP result through a summarizer, **ignore that nudge for
+  reference/canonical MCP output** — losing a signature or an exact value silently
+  is far costlier than the tokens saved.
+
+For the output that IS safe to compress (transient + non-MCP), in priority order:
+1. **Generate less at the source.** `grep -c`/`-l` instead of dumping matches,
+   `head`/`tail`, `--quiet`/`-s` flags, a narrow test selector instead of the full
+   suite. The cheapest output is the output never produced.
+2. **Let the `.3t-verify` hook summarize build/test.** If the project has a
+   `.claude/.3t-verify` command, `post-agent.mjs` already injects a PASS/FAIL
+   summary after each delegation instead of the raw log (see POST-DELEGATION
+   AUDIT). This is 3T-native and needs no other plugin.
+3. **Route bulk output through Haiku** (DELEGATING RECON READS above) — "run X and
+   tell me the result" lands the raw bytes in cheap, disposable subagent context.
+
+**If context-mode is installed**, it auto-handles the general case for you —
+Bash command output, WebFetch, and large Reads are re-run in its sandbox and only
+the relevant slice returns. It does NOT touch MCP output (it only nudges), so the
+carve-out above holds. **If context-mode is absent or disabled**, you lose that
+automatic net for the general case — fall back to the source-level habits in #1
+and the native levers #2–#3. The principle is the same either way; only the
+automatic safety net is optional.
+
+---
+
 ## PRE-AGENT CHECKLIST — BLOCKING GATE
 
 The checklist lives in exactly ONE place — the `3t-gate.md` card — and the
