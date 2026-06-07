@@ -76,6 +76,22 @@ then continue.
 
 ---
 
+## STEP 4 — One-shot session probe
+
+STEP 4a, 4b, and 5 each need deterministic facts (advisor model, workflow flag,
+project-state artifacts, git history). Gather them ALL in one call instead of
+~8 separate shell round-trips:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/bin/session-probe.mjs"
+```
+
+Hold the printed block. The labeled lines feed the next three steps directly —
+`advisor:` → 4a, `workflow_mode:` → 4b, the artifact lines + `recent_commits:` →
+5. The probe only gathers facts; you still make the judgement calls.
+
+---
+
 ## STEP 4a — Verify the advisor (per-developer, every session)
 
 The advisor is the architect tier, but it is **experimental and per-developer**:
@@ -84,14 +100,10 @@ not guarantee each teammate has the advisor enabled in their own client. `/3t-in
 runs once per project, so a teammate who clones an already-initialized repo never
 sees the advisor setup. This step closes that gap on every session start.
 
-Check whether an advisor model is configured:
+Read the probe's `advisor:` line (STEP 4 already gathered it — do not re-grep):
 
-```bash
-grep -hs '"advisorModel"' .claude/settings.json .claude/settings.local.json ~/.claude/settings.json 2>/dev/null | head -1
-```
-
-- **Found** → tell the user: "Advisor configured: [model]." No action needed.
-- **Not found** → recommend setup, do NOT block:
+- **A model is listed** → tell the user: "Advisor configured: [model]." No action needed.
+- **`not configured`** → recommend setup, do NOT block:
 
   ```
   No advisor model configured for you yet. The architect tier routes hard or
@@ -100,9 +112,9 @@ grep -hs '"advisorModel"' .claude/settings.json .claude/settings.local.json ~/.c
   in-context reasoning ("Advisor pass:") for hard decisions.
   ```
 
-Do not run a token-spending smoke-test every session — the grep is enough. The
-first actual advisor consult this session reveals whether the feature responds;
-if it doesn't, use the labeled in-context fallback.
+Do not run a token-spending smoke-test every session — the probe line is enough.
+The first actual advisor consult this session reveals whether the feature
+responds; if it doesn't, use the labeled in-context fallback.
 
 ---
 
@@ -117,13 +129,9 @@ lives in `3t-workflow-mode.md`, loaded on demand only when enabled (see the
 "MODE FIRST" pointer in `3t-core.md`). The choice is per-developer and stored in
 a gitignored flag.
 
-Read the stored preference:
+Read the probe's `workflow_mode:` line (STEP 4 already gathered it):
 
-```bash
-test -f .claude/.3t-workflows && cat .claude/.3t-workflows
-```
-
-- **Flag present and `enabled`** → load the full workflow-mode protocol now (it
+- **`enabled`** → load the full workflow-mode protocol now (it
   is kept out of always-loaded core so off-by-default sessions don't pay for it),
   then report state in ONE line; do NOT re-prompt:
 
@@ -131,9 +139,9 @@ test -f .claude/.3t-workflows && cat .claude/.3t-workflows
   Read: ${CLAUDE_PLUGIN_ROOT}/context/3t-workflow-mode.md
   ```
   "Workflow delegation: enabled."
-- **Flag present and `disabled`** → do NOT load `3t-workflow-mode.md`. Report in
-  ONE line and move on; do NOT re-prompt: "Workflow delegation: off (direct + fork)."
-- **Flag absent (first run)** → offer the choice, do NOT block. Explain briefly:
+- **`disabled`** → do NOT load `3t-workflow-mode.md`. Report in ONE line and move
+  on; do NOT re-prompt: "Workflow delegation: off (direct + fork)."
+- **`unset (first run …)`** → offer the choice, do NOT block. Explain briefly:
 
   ```
   Optional: dynamic-workflow delegation. With it on, I route every delegated
@@ -162,16 +170,9 @@ delegation must never run an implementor on a larger model.
 
 ## STEP 5 — Detect project state
 
-Scan for artifacts:
-
-```bash
-test -s .claude/context/CONTEXT.md && echo "CONTEXT_EXISTS"
-test -s PRD.md && echo "PRD_EXISTS"
-test -s KANBAN.md && echo "KANBAN_EXISTS"
-ls .github/issues 2>/dev/null && echo "GITHUB_ISSUES"
-ls docs/adr/*.md 2>/dev/null | head -1 && echo "ADRS_EXIST"
-git log --oneline -5 2>/dev/null
-```
+The probe from STEP 4 already scanned for artifacts — use its lines (`CONTEXT.md`,
+`PRD.md`, `KANBAN.md`, `github_issues`, `docs/adr`, `cold_index`, `recent_commits`).
+Do not re-run the shell checks.
 
 Form a judgement. Show assessment to user:
 

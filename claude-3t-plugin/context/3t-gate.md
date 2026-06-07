@@ -1,13 +1,15 @@
 # 3-Tier PRE-AGENT GATE CARD
 
-Compact, per-delegation card. **This** is the only file re-read at every
-PRE-AGENT gate — NOT the full `3t-core.md`. The full protocol loads once per
-session (via `/claude-3t:3t-start`) and is restored after compaction by the
-SessionStart hook, so it is already in context; re-reading the whole 23KB file
-per delegation is wasted tokens. Re-read this card instead.
+**Single source of the PRE-AGENT CHECKLIST.** The checklist below exists in
+exactly one place — this file. The `pre-agent.mjs` hook reads it and injects it
+into context at every implementor delegation, so the executor does NOT manually
+re-read this card per gate (and never re-reads the full 23KB `3t-core.md` per
+gate either — that loads once per session and is restored after compaction by the
+SessionStart hook). When the hook delivers the boxes, show and confirm them.
 
-If you cannot recall a limit's full definition, it lives in `3t-core.md` under
-the matching heading — read that section on demand, not the whole file.
+Consult this card directly only to *shape a spec* before delegating. If you need
+a limit's full definition, it lives in `3t-core.md` under the matching heading —
+read that section on demand, not the whole file.
 
 ---
 

@@ -201,11 +201,21 @@ plugin tag` to cut a validated `claude-3t--vX.Y.Z` git tag for a real release.
 claude-3t-plugin/
 ├── .claude-plugin/plugin.json
 ├── hooks/{hooks.json, session-start.mjs}   # gated SessionStart anchor
+├── hooks/{pre-agent,post-agent}.mjs         # inject the gate checklist / post-delegation audit
+├── bin/session-probe.mjs                    # one-shot state scan for /3t-start (advisor, flags, project state)
+├── bin/token-baseline.mjs                   # static token-cost estimate of every context artifact
 ├── context/3t-core.md                       # executor protocol, loaded once/session
 ├── context/3t-reference.md                  # occasional protocols (grill flow, fork mode, etc.)
-├── context/3t-gate.md                        # compact PRE-AGENT card — the only per-delegation re-read
+├── context/3t-gate.md                        # PRE-AGENT checklist — single source; pre-agent.mjs injects it
 ├── context/3t-workflow-mode.md              # workflow-delegation protocol, loaded on demand when enabled
 ├── skills/{3t-start,3t-init,3t-status,3t-checkpoint,3t-debrief,3t-leaving}/SKILL.md
 ├── agents/implementor.md                    # Haiku subagent
 └── templates/                               # blank project files /claude-3t:3t-init copies in
 ```
+
+**Optional per-project files** (not scaffolded; create to opt in):
+- `.claude/.3t-verify` — one shell command (e.g. `npm test -s`). When present,
+  `post-agent.mjs` runs it on every implementor return and injects a PASS/FAIL
+  summary, so the executor reads the result instead of spending a tool call on
+  the post-delegation build/test. Runs synchronously with a 120s timeout — keep
+  the command fast.
