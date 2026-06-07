@@ -5,7 +5,9 @@ exactly one place — this file. The `pre-agent.mjs` hook reads it and injects i
 into context at every implementor delegation, so the executor does NOT manually
 re-read this card per gate (and never re-reads the full 23KB `3t-core.md` per
 gate either — that loads once per session and is restored after compaction by the
-SessionStart hook). When the hook delivers the boxes, show and confirm them.
+SessionStart hook). Run the boxes manually in your response text BEFORE issuing
+the delegation call — the hook delivers them only in the NEXT turn (after the call
+is already issued), so its copy is an audit backstop, not a pre-flight block.
 
 Consult this card directly only to *shape a spec* before delegating. If you need
 a limit's full definition, it lives in `3t-core.md` under the matching heading —
