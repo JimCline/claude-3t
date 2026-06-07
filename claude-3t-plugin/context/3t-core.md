@@ -252,15 +252,24 @@ automatic safety net is optional.
 
 ---
 
-## PRE-AGENT CHECKLIST — BLOCKING GATE
+## PRE-AGENT CHECKLIST — MANUAL PRE-FLIGHT GATE
 
 The checklist lives in exactly ONE place — the `3t-gate.md` card — and the
-`pre-agent.mjs` hook **injects it automatically at every implementor delegation**.
-So you do NOT manually re-read the card per gate (that per-delegation re-read is
-gone); when the hook delivers the boxes, show them as visible text and confirm
-each before the call proceeds. Consult the card's limit-reminders directly only
-when *shaping* a spec; the full limit definitions are the sections of this file
-(Tech Lead Standard, Handoff Contract, Spec Sizing, Extended Context Override).
+`pre-agent.mjs` hook delivers it at every implementor delegation. So you do NOT
+manually re-read the card per gate (that per-delegation re-read is gone).
+
+**The hook is a NEXT-TURN audit, not a pre-flight block.** A `PreToolUse` hook's
+injected text becomes visible only in the turn *after* the tool call is issued —
+by then the `Workflow`/`Agent` call is already executing. The hook cannot
+interrupt the call in flight (it injects context, it does not hard-block).
+Therefore the gate is YOURS to run, manually, in your response text **before** you
+issue the delegation call: reason through each box, show them explicitly, confirm
+all pass, then issue the call. When the hook's checklist arrives next turn, treat
+it as an audit trail — re-check your work against it, and if any box fails there,
+surface it immediately and correct (re-delegate or fix forward). Consult the
+card's limit-reminders directly only when *shaping* a spec; the full limit
+definitions are the sections of this file (Tech Lead Standard, Handoff Contract,
+Spec Sizing, Extended Context Override).
 
 Same discipline in workflow mode: run the gate per implementor spec you hand the
 script — the workflow batches launches, it does not exempt a spec from the gate.
