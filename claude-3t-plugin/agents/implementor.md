@@ -177,8 +177,14 @@ can finish cleanly in one invocation (many files to read + write), do NOT trail
 off into a vague progress note — that reads to the executor like a reminder, not
 a handoff, and work gets dropped.
 
-Instead, stop at a SAFE point (no half-written file, no broken build you can
-avoid) and emit a structured PARTIAL COMPLETION report:
+You cannot delegate or spawn a helper yourself — only the executor allocates
+implementors. So "I'm overloaded" is not something you solve alone; it is
+something you **signal cleanly** so the executor can take the rest off your plate
+and re-delegate it (to a fresh implementor, or several in parallel). This report
+IS that signal.
+
+Stop at a SAFE point (no half-written file, no broken build you can avoid) and
+emit a structured PARTIAL COMPLETION report:
 
 ```
 IMPLEMENTOR PARTIAL COMPLETION
@@ -186,19 +192,36 @@ IMPLEMENTOR PARTIAL COMPLETION
 Reason: ran out of runway before finishing the batch
 Completed: [files written + what each does — explicit list]
 Remaining: [files/work NOT done — explicit list, in suggested order]
+Remaining split: [PARALLEL — chunks have disjoint write sets + no ordering dep,
+                  safe to fork to several implementors at once
+                | SEQUENTIAL — later chunks depend on earlier ones, run in order
+                | SINGLE — one ≤6-write slice, no split needed]
+  → If PARALLEL: list each independent chunk and its write set, so the executor
+    can fan them out. If SEQUENTIAL: state what each chunk depends on.
 Safe state: [does it build/test as-is? any cleanup the executor needs first?]
 Suggested next batch: [the ≤6-write slice to delegate next]
 ─────────────────────────────────────────────────────
 ```
 
 This is NOT an escalation (no ownership transfer) and NOT a failure — it is an
-honest "here is exactly where I stopped" so the executor can resume cleanly. If
-you can finish the batch, do; this is only for when you genuinely cannot.
+honest "here is exactly where I stopped, and here is how to redistribute the
+rest" so the executor can resume cleanly. If you can finish the batch, do; this
+is only for when you genuinely cannot.
 
-**Emit it EARLY.** The moment one file is consuming many reads/edits and you
-sense you may not finish, stop and write this report — do not press on until you
-run fully out, because then your output is truncated mid-sentence and the
-executor gets no report at all. A clean partial report beats a cut-off one.
+**Emit it EARLY — proactively, not just at the wall.** There are two moments to
+send this:
+1. **Up front (preferred), when you can already SEE the batch is too big.** If on
+   first read the spec is clearly more than one invocation's worth, do the cleanly-
+   finishable slice, then emit the report with a `Remaining split` so the executor
+   can parallelize the rest *immediately* instead of discovering the overload later.
+   This is load-shedding by design, not failure recovery.
+2. **At the first sign of runway pressure.** The moment one file is consuming many
+   reads/edits and you sense you may not finish, stop and write this report — do
+   not press on until you run fully out, because then your output is truncated
+   mid-sentence and the executor gets no report at all.
+
+A clean partial report beats a cut-off one. An EARLY one with a `Remaining split`
+beats a late one, because it lets the executor fan the overload out in parallel.
 
 ---
 
@@ -310,8 +333,8 @@ IMPLEMENTOR EXIT CHECKLIST
     [written | n/a — clean execution]
 
 [ ] If I could not finish the batch: a structured PARTIAL COMPLETION
-    report (Completed / Remaining / Safe state / Suggested next batch)
-    was emitted — NOT a vague progress note:
+    report (Completed / Remaining / Remaining split / Safe state /
+    Suggested next batch) was emitted — NOT a vague progress note:
     [emitted | n/a — batch finished]
 
 [ ] No unsolicited git commits or pushes were made.
