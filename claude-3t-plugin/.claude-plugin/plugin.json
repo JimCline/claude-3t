@@ -1,6 +1,6 @@
 {
   "name": "claude-3t",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Three-tier Claude Code agent architecture: executor (your session model) + Opus advisor (architect) + Haiku implementor, with file-based hot/cold memory. No server, no container.",
   "author": { "name": "Jim Cline" },
   "homepage": "https://github.com/JimCline/claude-3t"
