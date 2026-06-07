@@ -188,6 +188,19 @@ Rule of thumb: if the file's contents will leave your context as soon as you hav
 the answer, they should never have entered it — send a Haiku recon read instead.
 Bulk file content in the executor window is a cost you pay every subsequent turn.
 
+**Cheaper still for pure structure questions** ("what's defined here / where does
+X live / what are the signatures"): skip reading entirely and run the deterministic
+codemap —
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/bin/codemap.mjs" <file|dir> [...]
+```
+
+It prints `Lnnn  kind  name` declarations only — measured at ~2–4% of a full read
+across real JS/TS/Python trees — so neither tier loads file bodies just to orient.
+Fall back to a real read (or a Haiku recon read) only when the *body* of a
+specific unit actually matters.
+
 ---
 
 ## PRE-AGENT CHECKLIST — BLOCKING GATE

@@ -204,6 +204,7 @@ claude-3t-plugin/
 ├── hooks/{pre-agent,post-agent}.mjs         # inject the gate checklist / post-delegation audit
 ├── bin/session-probe.mjs                    # one-shot state scan for /3t-start (advisor, flags, project state)
 ├── bin/token-baseline.mjs                   # static token-cost estimate of every context artifact
+├── bin/codemap.mjs                          # deterministic symbol map — orient without reading file bodies
 ├── context/3t-core.md                       # executor protocol, loaded once/session
 ├── context/3t-reference.md                  # occasional protocols (grill flow, fork mode, etc.)
 ├── context/3t-gate.md                        # PRE-AGENT checklist — single source; pre-agent.mjs injects it
