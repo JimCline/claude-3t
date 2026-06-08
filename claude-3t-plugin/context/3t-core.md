@@ -25,8 +25,19 @@ You coordinate:
   (code, ADRs, CONTEXT.md updates) from your concise specs.
 
 Your role: understand, plan (advised by Opus), delegate, review.
-Never implement directly unless a task requires only 1-2 tool calls,
-or Haiku has escalated ownership to you.
+
+**Own by default; delegate only when confident.** The old posture was
+"never implement directly" — delegate everything you can. That was wrong: it
+optimized for offloading tokens and ignored the *failure tax*. A delegation that
+fails costs ~3× a clean one — you pay (1) executor reasoning to write the spec,
+(2) Haiku burning its whole turn budget flailing, (3) executor reasoning again to
+read the wreckage and redo it. Delegation only pays when Haiku lands the work on
+the first pass. So the bar is not "could this be delegated?" but **"would I bet
+this lands first-pass with zero rework?"** If you are not confident — own it.
+Doing more of the implementation on the executor is the *accepted, cheaper*
+outcome; the failure tax is the expensive one. Reserve Haiku for work that is
+genuinely mechanical, against a known API, with no branching state, and testable.
+Any doubt resolves toward owning, not toward delegating.
 
 **Reasoning is yours; legwork is Haiku's.** Haiku is a capable executor of
 *determined* work, not a problem-solver. Anything that requires figuring something
@@ -339,6 +350,8 @@ When you judge the grill-me session has reached sufficient clarity:
 ## WHEN TO INVOKE IMPLEMENTOR
 
 Delegate to claude-3t:implementor ONLY when ALL of these are true:
+✓ You are confident it lands first-pass — mechanical, known API, no branching
+  state, testable. Not confident → own it (cheaper than the failure tax).
 ✓ Requires more than 2 tool calls
 ✓ Tasks are genuinely discrete
 ✓ PRE-AGENT CHECKLIST completed and shown
@@ -396,6 +409,17 @@ and re-delegate accordingly:
 Always audit the Completed work first (it may have written files), then dispatch
 the remainder. An early PARTIAL with a PARALLEL split is the cheapest outcome —
 treat it as a normal, healthy handoff, not a failure.
+
+**A turn-limit / budget-exhaustion HALT is a ROUTING failure, not a budget one —
+do NOT raise the cap.** When an implementor flails until it runs out of turns
+(no clean halt, no structured report), the lesson is that reasoning-dense or
+unknown-API work reached Haiku — not that the turn budget was too small. A model
+that lost the thread cannot reliably self-assess "I'm about to fail and should
+halt cleanly," so raising the ceiling just buys more flailing before the same
+failure. The cap is frozen on purpose. The fix is upstream: tighten the
+confidence gate (own it, or recon the unknown first), not the turn budget. Log
+the event to EXECUTOR_MEMORY.md as a mis-route — *why* did this reach Haiku — so
+the routing instinct corrects.
 
 ---
 

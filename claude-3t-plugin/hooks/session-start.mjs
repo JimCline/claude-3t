@@ -69,10 +69,10 @@ function emit(additionalContext) {
 if (isContinuation) {
   // Continuing after a context reset. Reload ONLY if 3t was active this session.
   if (!existsSync(FLAG)) process.exit(0); // user had declined → silent
-  emit(`# 3-Tier Protocol — Reload Required (post-${source})
+  emit(`# Session Protocol — Reload Required (post-${source})
 
-The context was just reset, but the 3-tier protocol was ACTIVE this session.
-Re-run \`/claude-3t:3t-start\` now to reload the full executor protocol and hot
+The context was just reset, but the session protocol was ACTIVE this session.
+Re-run \`/claude-3t:3t-start\` now to reload the full protocol and hot
 memory before continuing. Do this before any other work.`);
 }
 
@@ -83,22 +83,21 @@ try {
   // Flag absent — nothing to reset.
 }
 
-emit(`# 3-Tier Agent Architecture Detected
+emit(`# Structured Session (claude-3t) Detected
 
-This project is 3t-initialized: an executor (your session model) + Opus advisor
-+ Haiku implementor, with file-based hot/cold memory.
+This project is initialized with the claude-3t session protocol: Sonnet executor
++ Opus advisor + file-based hot/cold memory.
 
 BEFORE doing anything else, ask the user exactly this and wait for an answer:
 
-  "This project is set up for the 3-tier agent workflow. Start it for this
+  "This project uses the claude-3t structured session. Start it for this
    session? (yes/no)"
 
-- If YES → run \`/claude-3t:3t-start\` to load the full protocol and hot memory,
+- If YES → run \`/claude-3t:3t-start\` to load the protocol and hot memory,
   then continue. (That skill marks the session active so the protocol is
   automatically reloaded after any context compaction.)
-- If NO  → proceed normally and do NOT load the 3t protocol this session. Do not
+- If NO  → proceed normally and do NOT load the protocol this session. Do not
   ask again unless the user brings it up.
 
-(Other commands once started: /claude-3t:3t-status, /claude-3t:3t-checkpoint,
-/claude-3t:3t-debrief, /claude-3t:3t-leaving. Implementation → claude-3t:implementor
-subagent.)`);
+(Other commands: /claude-3t:3t-status, /claude-3t:3t-tokens,
+/claude-3t:3t-checkpoint, /claude-3t:3t-debrief, /claude-3t:3t-leaving.)`);

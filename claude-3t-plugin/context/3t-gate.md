@@ -17,11 +17,15 @@ read that section on demand, not the whole file.
 
 ## THE LIMITS THIS GATE ENFORCES (one line each)
 
-- **Tech Lead Standard** — could a competent engineer finish from exactly this
-  spec with zero follow-up questions? If no, keep writing.
+- **Tech Lead Standard + confidence** — could a competent engineer finish from
+  exactly this spec with zero follow-up questions, AND would you bet it lands
+  first-pass with zero rework? If no to either → keep writing or own it.
 - **≤ ~6 file writes per delegation** — count the writes the spec implies. Over
   budget → split: fork parallel if chunks are independent, else sequential
   batches. (A single hard file can also blow the turn ceiling under budget.)
+- **External library APIs verified before spec** — if the spec names a NuGet /
+  npm / pip package whose current API you have NOT confirmed this session → STOP.
+  Run a Haiku recon read first; see `3t-core.md` SPEC SIZING.
 - **Own tightly-coupled / state-machine work directly** — never describe a
   complex branching state machine to Haiku via comments.
 - **No stale reads** — no file in the spec was edited by you AFTER the
@@ -51,12 +55,20 @@ PRE-AGENT CHECKLIST
 
 Target:  implementor
 ─────────────────────────────────────────────────────
-[ ] Task spec satisfies the Tech Lead Standard
-    (Haiku-completable with zero follow-up questions)
+[ ] Task spec satisfies the Tech Lead Standard, AND I'd bet it lands
+    first-pass with zero rework (Haiku-completable, zero follow-up
+    questions). Not confident → own it, don't delegate.
 
 [ ] Write budget: spec implies ≤ ~6 file writes
     Counted: [N]. If >6 → STOP and split: fork parallel if the
     chunks are independent, else sequential batches.
+
+[ ] External libraries: every NuGet / npm / pip package named in this spec
+    has had its current constructor signatures / namespaces / API shape
+    verified this session — OR this spec names no external packages.
+    If NOT verified → STOP. Delegate a Haiku recon read first
+    ("read these files/docs, report current signatures for X"), then
+    return here: [verified | n-a]
 
 [ ] No tightly-coupled / state-machine file is being
     delegated (own those directly): [confirmed | n-a]

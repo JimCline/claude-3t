@@ -1,47 +1,116 @@
-# Claude Code 3-Tier Agent Architecture
+# claude-3t: Structured Claude Code Sessions
 
-A Claude Code **plugin** that structures your work across three model tiers, with
-file-based hot/cold memory. No server, no container, no install script.
+*Previously marketed as a "3-tier agent architecture." Read the assessment below
+before adopting that pattern.*
+
+## Honest assessment: the Haiku implementor tier does not achieve its goal
+
+This plugin was built on the premise that delegating implementation work to a
+cheaper model tier (Haiku) would save tokens. After extensive use and a
+controlled experiment, that premise is false.
+
+**The data (12-agent controlled experiment, 2 task types × 2 tiers × 3
+replicates, all independently verified):**
+
+| Task type | Haiku avg tokens | Sonnet avg tokens | Haiku tool-uses | Sonnet tool-uses |
+|---|---|---|---|---|
+| Determined/mechanical (ideal) | 17,216 | 15,401 | 5 | 3 |
+| Unfamiliar API (realistic) | 34,754 | 33,878 | 33 | 18 |
+
+On the best-case task, Haiku costs **12% more** than Sonnet, not less — the
+tier-pricing advantage is fully absorbed by Haiku's overhead. On realistic
+feature work involving any unfamiliar library API, the token cost is
+**essentially identical** while Haiku burns **1.8× more build iterations** to
+converge. In one run Haiku used 42 tool calls against a 50-turn budget — one
+added API wrinkle away from a budget-exhaustion HALT on a simple counter app.
+
+When a delegation fails (wrong shape of work reaches Haiku), the failure tax is
+~3× a clean run: you pay executor tokens to write the spec, Haiku tokens to
+flail to the turn limit, and executor tokens again to read the wreckage and redo
+it. The savings window is real but so narrow that one failure per five clean
+runs wipes it out.
+
+**Why this is hard to fix in user-space.** The architecture shipped 20 PRs of
+routing patches — gate cards, confidence predicates, turn-limit freezes, workflow
+modes, load-shedding signals — all trying to widen the range of work Haiku can
+reliably handle. The patches kept coming because the underlying problem is a
+capability gap, not a protocol gap. For Haiku to reliably implement against an
+unfamiliar API, it would need the same ability to reason through novel
+documentation that makes Sonnet more expensive in the first place.
+
+What would actually achieve the goal is a **native Anthropic implementor
+capability** analogous to how `advisorModel` works today — a harness-level
+mechanism that routes *verified mechanical work* to a cheaper tier with
+guaranteed structured returns and harness-managed retry, rather than a
+prompt-level protocol asking the model to self-assess whether a task is
+delegation-safe. That would remove the capability-ceiling failure mode entirely.
+Until that exists, user-space solutions hit the same wall this project hit.
+
+**Recommendation:** Use **Sonnet + Advisor** (`advisorModel: "claude-opus-4-8"`).
+Let the executor model (Sonnet) do all implementation work directly. Consult Opus
+via `/advisor` for hard, irreversible, or design-critical decisions. This is
+less architecturally interesting but it is what actually works — and the
+remaining value in this plugin (memory model, session continuity, token tooling,
+lifecycle skills) supports that pattern without the implementor layer.
+
+The Haiku implementor is not removed from the plugin — it still functions for
+the narrow case where it genuinely wins: explicitly mechanical batch work with no
+API discovery (rename 40 files, transcribe a settled ADR to disk, apply a known
+transform uniformly). But it should not be the default path for feature
+implementation, and the protocol no longer pretends it is.
+
+---
+
+## What remains of value
+
+- **Advisor tier (`/advisor`)** — Opus for hard/irreversible decisions. Proven,
+  pays for itself on design-critical choices. Keep this.
+- **Hot/cold file-based memory** — `MEMORY.md` / `CONTEXT.md` / `cold/`
+  structured persistence. Solid pattern for any project.
+- **SessionStart hook** — Automatic context reload after compaction. Useful
+  regardless of tier count.
+- **Token measurement** — `bin/session-tokens.mjs` reads real API-reported
+  counts from any historical session transcript. Useful for any project.
+- **Session lifecycle skills** — `/3t-debrief`, `/3t-checkpoint`, `/3t-tokens`,
+  `/3t-status`. Session management that has nothing to do with the implementor.
+- **Auto-verify (`.3t-verify`)** — Inject build/test results after work without
+  spending a tool call. Good pattern regardless of tier.
+
+---
 
 ```
 You
-  → Executor       (your session model — runs sessions, decides, delegates, reviews)
-      → advisor       (Opus — the architect tier: hard/irreversible reasoning)
-      → implementor   (Haiku, latest — implementation AND artifact authorship)
+  → Executor       (your session model — runs sessions, decides, implements)
+      → advisor       (Opus — hard/irreversible reasoning; produces no artifacts)
 
 Memory: file-based, in .claude/context/
   → Hot:  small files loaded in full when a session starts
   → Cold: durable facts loaded on demand via cold/INDEX.md
 ```
 
-The executor runs as whatever model is selected for the session — it is not
-pinned. It is simply your session model; the advisor (Opus) and implementor
-(Haiku) are the two tiers the plugin actually configures. Both default models are
-easy to change — see
-[Choosing the advisor model](claude-3t-plugin/README.md#choosing-the-advisor-model)
-and [Choosing the implementor model](claude-3t-plugin/README.md#choosing-the-implementor-model).
-
 ---
 
-## Intent
+## What this plugin gives you
 
-Most Claude Code work is done by one model in one context. This plugin splits the
-work the way a small team would:
+**The executor (your session model) does the implementation.** This is not an
+architecture where work is split across tiers — it is a set of structural supports
+that make long, complex sessions more reliable:
 
-- **The executor coordinates** — understands the problem, plans, delegates, reviews. It
-  holds the thread but doesn't burn its context on bulk implementation.
-- **The advisor (Opus) is the architect** — consulted for hard or hard-to-reverse
-  decisions. It produces no artifacts; it sharpens the executor's judgement.
-- **Haiku implements** — writes code, runs test loops, and authors the durable
-  record (ADRs, `CONTEXT.md`) by faithful transcription from a concise spec.
+- **Advisor (Opus)** — escalate hard, irreversible, or design-critical decisions to
+  a stronger reasoning model. It produces no artifacts; it sharpens your judgement
+  and returns control to you. Set once in `settings.json`; invoked via `/advisor`.
+- **Structured memory** — a small always-loaded **hot** set of files
+  (`MEMORY.md`, `CONTEXT.md`, `EXECUTOR_MEMORY.md`) plus an indexed **cold** store
+  pulled on demand. Sessions survive compaction; knowledge accumulates across runs.
+- **Session lifecycle tools** — `/3t-start`, `/3t-checkpoint`, `/3t-debrief`,
+  `/3t-tokens` — so you can open a session with full context, snapshot progress,
+  and capture lessons without ceremony.
+- **Token measurement** — `bin/session-tokens.mjs` reads exact API-reported counts
+  from any session transcript; `bin/token-baseline.mjs` estimates what each
+  context artifact costs statically.
 
-Knowledge persists in plain files, split into a small always-loaded **hot** set
-and an indexed **cold** store loaded only when a task needs it. The goal is to
-keep each tier's context lean and let decisions, not raw bytes, flow between them.
-
-The architecture is **opt-in twice**: per project (you initialize it) and per
-session (it asks before loading). Installed globally, it stays completely
-invisible in every project you haven't opted into.
+The plugin is **opt-in twice**: per project (you initialize it) and per session
+(it asks before loading). Installed globally, it stays invisible everywhere else.
 
 ---
 
@@ -49,52 +118,37 @@ invisible in every project you haven't opted into.
 
 Everything ships in one plugin (`claude-3t-plugin/`):
 
-| Piece | Delivered as | Tier |
+| Piece | Delivered as | Purpose |
 |---|---|---|
-| Session prompt + protocol reload | `SessionStart` hook | executor |
-| `/3t-start`, `/3t-init`, `/3t-status`, `/3t-checkpoint`, `/3t-leaving` | skills | executor |
-| Executor protocol (`3t-core`, `3t-reference`) | bundled context, loaded by `/3t-start` | executor |
-| `implementor` | plugin subagent (`claude-3t:implementor`) | implementor |
-| advisor | `advisorModel` in project `settings.json` | architect |
+| Session prompt + protocol reload | `SessionStart` hook | loads context on start and after compaction |
+| `/3t-start`, `/3t-init`, `/3t-status`, `/3t-checkpoint`, `/3t-tokens`, `/3t-leaving` | skills | session lifecycle |
+| Session protocol (`3t-core`, `3t-reference`) | bundled context, loaded by `/3t-start` | working memory + advisor flow |
+| advisor | `advisorModel` in project `settings.json` | Opus for hard decisions |
 
 **The activation chain:**
 
 1. **Install the plugin once** (globally). It does nothing until a project opts in.
-2. **`/claude-3t:3t-init`** (once per project) scaffolds the writable memory files,
+2. **`/claude-3t:3t-init`** (once per project) scaffolds the memory files,
    writes `settings.json` with `advisorModel`, and plants a committed marker
    (`.claude/context/cold/INDEX.md`).
 3. On each **session start** in a marked project, the hook asks:
-   *"Start the 3-tier workflow for this session? (yes/no)"*
-   - **Yes** → runs `/claude-3t:3t-start`, which loads the protocol + hot memory
-     and marks the session active.
+   *"Start the workflow for this session? (yes/no)"*
+   - **Yes** → runs `/claude-3t:3t-start`, which loads the protocol + hot memory.
    - **No** → the session proceeds normally; nothing is loaded.
-4. After a **context compaction**, the hook checks the per-session flag and, if you
-   were active, tells the executor to reload the protocol automatically.
-
-So a project is "3t" only if it carries the marker, and the protocol only engages
-when you say yes — the plugin can be installed globally with zero footprint
-elsewhere.
+4. After a **context compaction**, the hook checks the per-session flag and, if
+   active, tells the executor to reload the protocol automatically.
 
 ---
 
 ## Install & use
 
-The plugin lives at **https://github.com/JimCline/claude-3t**. Install it from
-the GitHub repo:
-
 ```bash
-claude plugin marketplace add JimCline/claude-3t      # shorthand for the GitHub repo
+claude plugin marketplace add JimCline/claude-3t
 claude plugin install claude-3t@claude-3t
 ```
 
-`JimCline/claude-3t` is the `owner/repo` shorthand; the full
-`https://github.com/JimCline/claude-3t` URL works too. Claude Code clones the
-repo's default branch — a private repo works for you with your existing git/GitHub
-auth; it only needs to be public for others to install without access.
-
-> Developing the plugin locally? Point the marketplace at your clone instead:
-> `claude plugin marketplace add /path/to/claude-3t` (reads the working tree, no
-> push needed).
+> Local development: `claude plugin marketplace add /path/to/claude-3t` (reads
+> the working tree, no push needed).
 
 Then, in a project:
 
@@ -107,11 +161,12 @@ Then, in a project:
 |---|---|
 | `/claude-3t:3t-init` | Initialize a project (once) |
 | `/claude-3t:3t-start` | Begin/resume a session — load protocol + hot memory |
-| `/claude-3t:3t-status` | Memory state, cold index, model status, compliance |
+| `/claude-3t:3t-status` | Memory state, cold index, model status |
+| `/claude-3t:3t-tokens` | Measured session token usage by category and exchange |
 | `/claude-3t:3t-checkpoint` | Write a session snapshot now |
 | `/claude-3t:3t-debrief` | Post-work debrief — route lessons to memory or upstream feedback |
 | `/claude-3t:3t-leaving` | Departure protocol for autonomous work |
-| `/claude-3t:3t-remove` | Deactivate or fully remove 3t from the project |
+| `/claude-3t:3t-remove` | Deactivate or fully remove from the project |
 
 Full plugin documentation: [`claude-3t-plugin/README.md`](claude-3t-plugin/README.md).
 
@@ -121,59 +176,37 @@ Full plugin documentation: [`claude-3t-plugin/README.md`](claude-3t-plugin/READM
 
 | Tier | Files | Committed? | Loaded |
 |---|---|---|---|
-| **Hot** | `MEMORY.md`, `CONTEXT.md`, `EXECUTOR_MEMORY.md`, `IMPLEMENTOR_MEMORY.md`, `OVERRIDE_LOG.md` | `CONTEXT.md` only | in full each session |
+| **Hot** | `MEMORY.md`, `CONTEXT.md`, `EXECUTOR_MEMORY.md`, `OVERRIDE_LOG.md` | `CONTEXT.md` only | in full each session |
 | **Cold** | `cold/INDEX.md` + `cold/*.md` | yes | index always scanned; topic files on demand |
 
 A fact belongs in cold storage only if it is **durable** (true after a year of
 commits), **cold** (not needed every task), and **expensive to re-derive**.
 Volatile facts (signatures, config values, versions) are never stored — they are
-re-derived from the code. This is the same pattern Claude Code uses for its own
-memory: a small index, files pulled selectively.
-
-The handoff to the implementor is a **concise task spec in the agent prompt
-itself** — not a shared file. The executor pastes the relevant `INDEX.md` rows
-so the agent knows what cold knowledge exists, and the agent self-reads what it
-needs. This keeps the executor lean and is parallel-safe.
+re-derived from the code.
 
 ---
 
-## Token economics & built-in tooling
+## Built-in tooling
 
-The architecture is built to keep the executor's context lean — pointers in,
-results out, file bodies handled by the cheap implementor tier. Four pieces of
-that are operator-visible:
-
-- **Auto-verify (`.claude/.3t-verify`, opt-in).** Drop one shell command into this
-  file (e.g. `npm test -s` or `dotnet build`). After every implementor delegation,
-  the `post-agent.mjs` hook runs it and injects a PASS/FAIL summary, so the
-  executor reads the result instead of spending a tool call on the
-  post-delegation build/test. Runs synchronously with a 120s timeout — keep the
-  command fast. Absent file → behaviour is unchanged (advisory reminder only).
-- **`bin/session-probe.mjs`.** One deterministic scan (advisor model, workflow
-  flag, project-state artifacts, git history) that `/3t-start` runs in a single
-  call instead of ~8 separate shell round-trips.
-- **`bin/token-baseline.mjs`.** A static estimate (~4 chars/token) of what every
-  context artifact costs — protocol files, hot memory, and each hook injection —
-  so optimizations are judged by a measured before/after delta, not intuition.
-  Run it from the plugin dir: `node bin/token-baseline.mjs [project-path]`.
-- **Transient-output policy** (protocol guidance, no tooling). The executor
-  summarizes read-once output (build/test/search/logs) at the source rather than
-  holding it raw — but **all MCP output and any canonical/reference content are
-  kept verbatim**, never compressed. Works with or without context-mode (which, if
-  installed, auto-compresses general Bash/WebFetch/Read output but leaves MCP
-  results untouched). See "TRANSIENT TOOL OUTPUT" in `claude-3t-plugin/context/3t-core.md`.
+- **`bin/session-tokens.mjs`** — reads exact API-reported token counts from any
+  session transcript (current or historical by UUID/path). Breaks down output,
+  cache-creation, uncached input, and cache-read separately so comparisons are
+  meaningful. Run: `node bin/session-tokens.mjs [uuid-or-path]`.
+- **`bin/token-baseline.mjs`** — static estimate of what every context artifact
+  costs (protocol files, hot memory, hook injections). Use for before/after deltas
+  when trimming context. Run: `node bin/token-baseline.mjs [project-path]`.
+- **Auto-verify (`.claude/.3t-verify`, opt-in)** — drop one shell command into
+  this file (e.g. `npm test -s` or `dotnet build`). After tool-call-heavy work,
+  the `post-agent.mjs` hook runs it and injects a PASS/FAIL summary. 120s timeout.
+- **Transient-output policy** (protocol guidance) — the executor summarizes
+  read-once output (build/test/search/logs) at the source rather than holding raw
+  bytes, but all MCP output and canonical reference content are kept verbatim.
 
 ---
 
 ## Optional companion resources
 
-These are independent tools that pair well with the workflow but are not part of
-the plugin. Install whichever you want:
-
-- **Context Mode** — compresses large tool output (build logs, test runs, search
-  results) so it doesn't flood your context.
-  Install: `claude plugin marketplace add mksglu/context-mode` then
-  `claude plugin install context-mode@context-mode`.
-- **Matt Pocock skills** — `/grill-with-docs`, `/to-prd`, `/to-issues`, which the
-  canonical design flow uses (`/grill-with-docs → advisor → /to-prd → /to-issues
-  → execution`). Install: `npx skills@latest add mattpocock/skills`.
+- **Context Mode** — compresses large tool output so it doesn't flood context.
+  `claude plugin marketplace add mksglu/context-mode && claude plugin install context-mode@context-mode`
+- **Matt Pocock skills** — `/grill-with-docs`, `/to-prd`, `/to-issues`.
+  `npx skills@latest add mattpocock/skills`

@@ -1,13 +1,18 @@
 # claude-3t (plugin)
 
-Three-tier Claude Code agent architecture, packaged as a plugin — no installer
-script, no server, no container.
+Structured session management for Claude Code: **Sonnet + Advisor + file-based
+memory**. No installer, no server, no container.
 
-| Tier | Model | Delivered by |
-|---|---|---|
-| **Executor** | your session model (primary session) | SessionStart hook anchor + `/claude-3t:3t-start` skill |
-| **Architect** | Opus | native advisor (experimental), set by `advisorModel` in project `settings.json` (`/claude-3t:3t-init`) |
-| **Implementor** | Haiku (default — configurable, see below) | `claude-3t:implementor` subagent |
+```
+You (Sonnet — implements, decides, reviews)
+  → /advisor  (Opus — hard/irreversible reasoning; produces no artifacts)
+
+Memory: .claude/context/
+  → Hot:  MEMORY.md, CONTEXT.md, EXECUTOR_MEMORY.md  — loaded each session
+  → Cold: cold/INDEX.md + cold/*.md  — indexed, loaded on demand
+```
+
+---
 
 ## Install
 
@@ -16,212 +21,185 @@ claude plugin marketplace add JimCline/claude-3t
 claude plugin install claude-3t@claude-3t
 ```
 
-(For local development from a clone: `claude plugin marketplace add /path/to/claude-3t`.)
+Local development (no push needed):
+```bash
+claude plugin marketplace add /path/to/claude-3t
+```
+
+---
 
 ## Per-project, even when installed globally
 
-The plugin can be installed globally but stays **dormant** in every project until
-you initialize it. The SessionStart hook gates on the activation marker
-`.claude/context/cold/INDEX.md` (committed, so clones auto-activate):
+The plugin gates on a committed marker (`.claude/context/cold/INDEX.md`):
 
-- No marker → hook emits nothing; the session is untouched.
-- Marker present, on session **start/resume** → the executor asks you
-  *"Start the 3-tier workflow for this session? (yes/no)"*. Yes runs
-  `/claude-3t:3t-start`; no proceeds normally with nothing loaded.
-- Marker present, on **compact/clear** → no re-prompt. A per-session flag
-  (`.claude/.3t-active`, set by `/claude-3t:3t-start`, reset on each new session)
-  tells the hook whether you'd opted in: if so it injects an unconditional
-  "reload the protocol" instruction; if not, it stays silent.
+- **No marker** → hook emits nothing; session is untouched.
+- **Marker present, session start/resume** → the executor is asked *"Start the
+  workflow for this session? (yes/no)"*. Yes runs `/claude-3t:3t-start`; no
+  proceeds normally.
+- **Marker present, compact/clear** → if the session was active (`.claude/.3t-active`
+  flag set by `/3t-start`), the protocol is reloaded automatically.
 
-So there are two opt-in layers: initializing a project (the marker) decides where
-the plugin *offers* itself, and the per-session yes/no decides whether it actually
-loads. Both must be yes for the protocol to engage.
+---
 
 ## Use
 
 ```
-/claude-3t:3t-init        # once per project — scaffolds writable memory + settings.json,
-                # plants the activation marker. Restart Claude afterward.
-/claude-3t:3t-start       # begin/resume a session — loads protocol + hot memory
-/claude-3t:3t-status      # memory state, cold index, model status, compliance
+/claude-3t:3t-init        # once per project — scaffolds memory + settings.json + marker, then restart
+/claude-3t:3t-start       # each session — loads protocol + hot memory
+/claude-3t:3t-status      # memory state, cold index, model status
 /claude-3t:3t-tokens      # measured session token usage by category / exchange
 /claude-3t:3t-checkpoint  # write a session snapshot now
 /claude-3t:3t-debrief     # post-work debrief — route lessons to memory / upstream
-/claude-3t:3t-feedback    # capture ONLY baseline-protocol gaps for upstream
+/claude-3t:3t-feedback    # capture a baseline-protocol gap for upstream
 /claude-3t:3t-leaving     # departure protocol for autonomous work
-/claude-3t:3t-remove      # deactivate or fully remove 3t from this project
-/claude-3t:3t-reset       # wipe 3t to zero so /3t-init can run from scratch
+/claude-3t:3t-remove      # deactivate or fully remove from this project
+/claude-3t:3t-reset       # wipe to zero so /3t-init can re-run (destructive — confirms first)
 ```
 
-Delegate implementation to `claude-3t:implementor`. Hard/irreversible design
-decisions route to the advisor (Opus) — the architect tier.
+---
 
-## Removing or deactivating 3t in a project
+## Advisor
 
-Run `/claude-3t:3t-remove`. It offers two modes (and confirms before deleting):
+The advisor is the native `advisorModel` escalation: when you need stronger
+judgement on a hard or irreversible decision, type `/advisor` at the prompt.
+Opus reasons through it and returns; the executor continues. It produces no
+artifacts — only sharpens your decision.
 
-- **Deactivate** — drops a `.claude/.3t-disabled` flag the hook checks, so 3t goes
-  dormant in this project while every file stays put. Reversible: `rm
-  .claude/.3t-disabled`.
-- **Full remove** — deletes the scaffolded memory + cold files, strips the 3t
-  `.gitignore` block and the `advisorModel` key, and leaves `docs/adr` and your
-  other settings (including your `model`) intact. Committed files (`CONTEXT.md`,
-  `cold/`) are recoverable with `git restore`.
+`/claude-3t:3t-init` writes `advisorModel: "opus"` to the project
+`.claude/settings.json`. Change it to any model alias or pinned ID; it takes
+effect next session. It is a native Claude Code setting — survives plugin
+updates.
 
-Either way the plugin stays installed globally. To remove it everywhere:
-`claude plugin uninstall claude-3t`.
+---
 
-## Choosing the advisor model
+## Memory model
 
-The advisor (architect tier) is the native, **experimental** advisor escalation:
-when the executor needs stronger judgement it escalates to the advisor model,
-then resumes. It is set by the `advisorModel` key in the project's `.claude/settings.json`.
-The executor/advisor split works under **any** executor model, so `/claude-3t:3t-init`
-sets only `advisorModel` and leaves your main `model` alone:
+| Layer | Files | Committed? | Loaded |
+|---|---|---|---|
+| **Hot** | `MEMORY.md`, `CONTEXT.md`, `EXECUTOR_MEMORY.md`, `OVERRIDE_LOG.md` | `CONTEXT.md` only | in full each session |
+| **Cold** | `cold/INDEX.md` + `cold/*.md` | yes | index always scanned; topic files on demand |
 
-```json
-{
-  "advisorModel": "opus"
-}
+Store only what is **durable** (true a year from now), **cold** (not needed
+every task), and **expensive to re-derive**. Never store volatile facts
+(signatures, config values, versions) — re-derive those from code.
+
+---
+
+## Token tooling
+
+**`bin/session-tokens.mjs`** reads exact API-reported counts from any session
+transcript — current session auto-detected, or pass a UUID / `.jsonl` path:
+
+```bash
+node bin/session-tokens.mjs                   # current session
+node bin/session-tokens.mjs <uuid>            # any past session by id
+node bin/session-tokens.mjs /path/to/file.jsonl
 ```
 
-Claude Code's advisor strategy recommends Sonnet as the main model with Opus as
-the advisor — near-Opus judgement at lower token cost
-(https://claude.com/blog/the-advisor-strategy) — but that's a recommendation, not
-a requirement: run Opus at low effort or any other executor and the advisor tier
-still works. To change the advisor, edit `advisorModel` to any model alias
-(`opus`, `sonnet`, `haiku`) or a pinned model ID (e.g. `claude-opus-4-8`); it
-takes effect next session. This is a **native, per-project** setting — no plugin
-file involved — so it survives plugin updates.
+Reports output, cache-creation, uncached input, and cache-read separately (do
+not sum them — the cache-read prefix is re-counted every turn).
 
-For interactive setup or a one-off change in the current session, type
-`/advisor` at the prompt to pick or confirm the advisor model (Opus / Sonnet /
-no advisor) without editing `settings.json`. Because the feature is experimental
-and may be unavailable, the executor falls back to explicit, labeled in-context
-reasoning for hard decisions when no advisor responds.
+**`bin/token-baseline.mjs`** statically estimates what every context artifact
+costs, so optimizations are judged by a measured delta:
 
-## Choosing the implementor model
-
-The implementor defaults to the `haiku` alias (latest Haiku, default effort),
-set in `agents/implementor.md`:
-
-```yaml
-model: haiku
+```bash
+node bin/token-baseline.mjs [project-path]
 ```
 
-To use a different model, change that one line to any model alias (`sonnet`,
-`opus`, `haiku`) or a pinned model ID (e.g. `claude-sonnet-4-6`). The executor
-and advisor are set elsewhere — only the implementor's model lives here.
+---
 
-Where the file is depends on how you installed the plugin:
+## Auto-verify (`.claude/.3t-verify`, opt-in)
 
-- **Local marketplace** (`marketplace add /path/to/claude-3t`) → edit
-  `claude-3t-plugin/agents/implementor.md` in your clone; the change is live next
-  session.
-- **GitHub marketplace** → the file lives under your Claude Code plugins
-  directory (e.g. `~/.claude/plugins/.../claude-3t/agents/implementor.md`). Edits
-  there work but are **overwritten when you update the plugin**, so for a durable
-  change, fork the repo and point your marketplace at the fork.
+Drop one shell command into `.claude/.3t-verify` (e.g. `npm test -s` or
+`dotnet build`). The `post-agent.mjs` hook runs it after tool-call-heavy work
+and injects a PASS/FAIL summary — one fewer tool call for the executor to spend
+on a build check. 120s timeout; absent file → no-op.
 
-Note: dropping a project-scoped `.claude/agents/implementor.md` does **not**
-override this — the executor invokes the namespaced `claude-3t:implementor`, so a
-plain project `implementor` is a separate agent. Editing the plugin file is the
-reliable lever.
+---
 
-## Dynamic-workflow delegation (opt-in)
+## Removing / deactivating
 
-By default the executor delegates implementation two ways: it does small things
-itself, or it fans an independent batch out to parallel `claude-3t:implementor`
-subagents (**fork mode**). There is an optional third gear: routing delegation
-through the `Workflow` tool.
+Run `/claude-3t:3t-remove`:
 
-It is a **per-developer mode switch**, offered once on your first `/claude-3t:3t-start`
-and stored in the gitignored flag `.claude/.3t-workflows` (`enabled` / `disabled`):
+- **Deactivate** — drops `.claude/.3t-disabled`; 3t goes dormant while files
+  stay. Reverse: `rm .claude/.3t-disabled`.
+- **Full remove** — deletes scaffolded memory + cold files, strips the 3t
+  `.gitignore` block and `advisorModel` key. Committed files recoverable with
+  `git restore`.
 
-- **On** → the executor routes *all* delegated implementor work through a
-  background workflow that runs the implementor (always Haiku) under a
-  structured-output schema. The payoff is a **completion report that can't
-  truncate** — the long-standing failure mode where a runway-starved implementor
-  cuts off mid-report — plus deterministic fan-out/pipeline orchestration for
-  large batches. The executor announces each workflow delegation before spawning.
-- **Off** (default) → nothing changes; direct + fork delegation as before.
+To remove the plugin globally: `claude plugin uninstall claude-3t`.
 
-The tradeoff: a workflow runs in the background, so the executor can't take over
-an escalation mid-run — a blocker comes back as a structured flag handled after
-the batch completes. The executor still independently re-runs build/test after
-every workflow (the schema guarantees the report arrived, not that the work is
-complete). Change your choice anytime by editing `.claude/.3t-workflows`.
+---
 
 ## Contributing feedback
 
-The plugin has a built-in feedback loop:
+1. **Capture** — run `/claude-3t:3t-debrief` after a rough session (routes
+   lessons to project memory and writes protocol gaps to
+   `.claude/context/3t-plugin-feedback.md`), or `/claude-3t:3t-feedback` for a
+   standalone protocol-gap capture.
+2. **File** — open a GitHub issue on **JimCline/claude-3t** with label
+   `feedback`, pasting the entry block as the body.
+3. **Apply** — in this repo, run `/3t-apply-feedback` to cluster, propose, and
+   apply approved changes.
+4. **Update** — `claude plugin marketplace update claude-3t && claude plugin update claude-3t`.
 
-1. **Capture** — when something goes wrong in a project session (HALT,
-   escalation, spec gap, audit failure), run `/claude-3t:3t-debrief`. It routes
-   project-specific lessons to that project's memory files and writes
-   *protocol-level* gaps to `.claude/context/3t-plugin-feedback.md`.
-   If you only want to capture a baseline-protocol gap (nothing project-local),
-   run `/claude-3t:3t-feedback` instead — it does just that one thing and writes
-   the same file in the format step 2 expects.
+---
 
-2. **File** — for each entry in `3t-plugin-feedback.md` that belongs in the
-   plugin itself (not just your project), open a GitHub issue on
-   **JimCline/claude-3t** with the label **`feedback`** and paste the entry block
-   as the issue body:
-   ```
-   Gap: [what the protocol/agent did not handle]
-   Evidence: [the concrete failure]
-   Proposed change: [checklist box / instruction / hook / skill]
-   ```
+## Releasing changes
 
-3. **Apply** — in this repo, run `/3t-apply-feedback`. It reads open feedback
-   issues (or accepts pasted content), clusters them, proposes specific changes to
-   plugin files, and applies approved ones through the 3t workflow. Applied issues
-   are closed with a version reference.
-
-4. **Update** — once a new version ships, run
-   `claude plugin marketplace update claude-3t && claude plugin update claude-3t`
-   in downstream projects.
-
-## Development — releasing changes
-
-**Bump `version` in `.claude-plugin/plugin.json` on every change you want installs
-to pick up.** It is the signal `claude plugin update` compares — without a bump,
-`update` reports "already at the latest version" even though files changed.
-
-To pull a new version into a project after bumping:
+Bump `version` in `.claude-plugin/plugin.json` on every change you want installs
+to pick up. Without a bump, `claude plugin update` reports "already current."
 
 ```bash
-claude plugin marketplace update claude-3t   # refresh the cached marketplace listing
-claude plugin update claude-3t               # installs the newer version
+claude plugin marketplace update claude-3t   # refresh cached listing
+claude plugin update claude-3t               # install newer version
 # restart Claude
 ```
 
-If `update` still says you're current, reinstall: `claude plugin uninstall
-claude-3t && claude plugin install claude-3t@claude-3t`. Optionally use `claude
-plugin tag` to cut a validated `claude-3t--vX.Y.Z` git tag for a real release.
+---
 
 ## Layout
 
 ```
 claude-3t-plugin/
 ├── .claude-plugin/plugin.json
-├── hooks/{hooks.json, session-start.mjs}   # gated SessionStart anchor
-├── hooks/{pre-agent,post-agent}.mjs         # inject the gate checklist / post-delegation audit
-├── bin/session-probe.mjs                    # one-shot state scan for /3t-start (advisor, flags, project state)
-├── bin/token-baseline.mjs                   # static token-cost estimate of every context artifact
-├── context/3t-core.md                       # executor protocol, loaded once/session
-├── context/3t-reference.md                  # occasional protocols (grill flow, fork mode, etc.)
-├── context/3t-gate.md                        # PRE-AGENT checklist — single source; pre-agent.mjs injects it
-├── context/3t-workflow-mode.md              # workflow-delegation protocol, loaded on demand when enabled
-├── skills/{3t-start,3t-init,3t-status,3t-tokens,3t-checkpoint,3t-debrief,3t-feedback,3t-leaving,3t-remove,3t-reset}/SKILL.md
-├── agents/implementor.md                    # Haiku subagent
-└── templates/                               # blank project files /claude-3t:3t-init copies in
+├── hooks/hooks.json
+├── hooks/session-start.mjs          # gated SessionStart anchor
+├── hooks/pre-agent.mjs              # injects gate checklist (see Legacy)
+├── hooks/post-agent.mjs             # auto-verify + post-delegation audit (see Legacy)
+├── bin/session-probe.mjs            # one-shot state scan for /3t-start
+├── bin/session-tokens.mjs           # measured token report from session transcript
+├── bin/token-baseline.mjs           # static token-cost estimate of context artifacts
+├── context/3t-core.md               # session protocol, loaded once/session
+├── context/3t-reference.md          # advisor flow, fork mode, occasional protocols
+├── context/3t-gate.md               # PRE-AGENT checklist (Legacy — implementor use)
+├── context/3t-workflow-mode.md      # workflow delegation protocol (Legacy)
+├── docs/measurement-protocol.md     # token economy experiment results
+├── skills/{3t-start,3t-init,3t-status,3t-tokens,3t-checkpoint,
+│          3t-debrief,3t-feedback,3t-leaving,3t-remove,3t-reset}/SKILL.md
+├── agents/implementor.md            # Haiku subagent (Legacy — see below)
+└── templates/                       # blank project files /3t-init copies in
 ```
 
-**Optional per-project files** (not scaffolded; create to opt in):
-- `.claude/.3t-verify` — one shell command (e.g. `npm test -s`). When present,
-  `post-agent.mjs` runs it on every implementor return and injects a PASS/FAIL
-  summary, so the executor reads the result instead of spending a tool call on
-  the post-delegation build/test. Runs synchronously with a 120s timeout — keep
-  the command fast.
+---
+
+## Legacy: Haiku implementor tier
+
+The plugin ships a `claude-3t:implementor` Haiku subagent and delegation
+protocol (`3t-core.md`, `3t-gate.md`, `3t-workflow-mode.md`). These are
+**not removed** — they function and may be useful for narrow mechanical batch
+work (apply the same transform to many files, transcribe a settled document to
+disk). But they are no longer the recommended path for general feature
+implementation.
+
+The short version of why: on unfamiliar-API work, Haiku and Sonnet cost the same
+in tokens while Haiku burns 1.8× more build iterations and runs near the turn
+budget on tasks a real project would consider simple. The failure tax (~3× a
+clean run when a delegation fails) wipes out any tier-pricing advantage. See
+[`docs/measurement-protocol.md`](docs/measurement-protocol.md) for the full
+controlled experiment and data.
+
+If you want to use the implementor for an explicitly mechanical batch, it is
+still there: invoke `claude-3t:implementor` directly and follow the
+PRE-AGENT CHECKLIST in `3t-gate.md`. The protocol has not been removed — it
+just is not the default recommendation anymore.

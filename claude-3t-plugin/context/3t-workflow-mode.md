@@ -21,7 +21,7 @@ instead of fork-vs-single-invoke:
 |---|---|---|
 | 1–2 tool calls | executor does it directly | executor does it directly |
 | tightly-coupled / state-machine | executor owns it directly | executor owns it directly |
-| single discrete delegated task | one implementor invoke | 1-agent workflow |
+| single discrete delegated task | one implementor invoke | direct invoke (a 1-agent workflow buys nothing here) |
 | independent batch | fork mode | fan-out workflow (`parallel`) |
 | independent items each needing verify | fork + audit | per-item implement→verify (`pipeline`) |
 | dependency chain (B needs A's output) | sequential batches | sequential `await`s — barrier between steps; NEVER `pipeline` |
@@ -45,11 +45,18 @@ modes — workflow mode only changes the *delegated* path.
 `Workflow` tool for implementor delegation *only when the flag is enabled*. With
 the flag off or absent, do NOT call `Workflow` — use direct/fork as today.
 
-**What it changes.** When enabled, you route ALL delegated implementor work
-through a workflow (even a single discrete task, as a 1-agent workflow). The
-reason is the reliable return: a workflow runs the implementor under a
-structured-output schema, so its completion report is validated and CANNOT
-truncate — the failure mode the POST-DELEGATION AUDIT exists to compensate for.
+**What it changes.** When enabled, a workflow becomes *available* as a delegation
+shape — it is NOT the mandatory path for all delegated work. Use it only where
+your judgment says it fits: a genuinely **independent, batched, low-to-no-reasoning**
+set of mechanical tasks, where running several Haiku implementors concurrently
+under a validated schema is worth the rigidity. A single discrete task does NOT
+need a 1-agent workflow — use direct execution. Anything reasoning-dense,
+tightly-coupled, or that you are not confident lands first-pass → own it (the
+default-own posture in `3t-core.md` applies in workflow mode unchanged). The
+workflow's value is the reliable, truncation-proof return on a *known-safe batch*;
+it does not rescue work that was the wrong shape to delegate. A workflow that
+burns its budget on a doomed task is the failure tax with extra steps — the schema
+makes the *report* reliable, not the *work* succeed.
 
 **Hard rules:**
 - **Announce every delegation.** Before launching, say one line:
@@ -75,8 +82,9 @@ truncate — the failure mode the POST-DELEGATION AUDIT exists to compensate for
   3. **Fix forward.** Build passes → accept the result and note the non-compliance.
      Incomplete → finish it yourself or re-delegate the remainder as a ≤6-write spec.
   4. Do NOT blindly re-invoke the same workflow expecting compliance — a second run
-     hits the same ceiling. If it was budget exhaustion, split the task smaller or
-     rely on the raised implementor turn budget, don't just retry.
+     hits the same ceiling. If it was budget exhaustion, treat it as a ROUTING
+     failure (see HALT HANDLING in `3t-core.md`): the work was the wrong shape for
+     Haiku. Own it or split it smaller — do NOT raise the turn cap and retry.
 - **Escalation is traded for reliable returns.** A workflow runs in the
   background; you are not watching mid-run, so the inline ESCALATION
   ownership-transfer handshake cannot operate. A blocker comes back as a
@@ -93,8 +101,10 @@ truncate — the failure mode the POST-DELEGATION AUDIT exists to compensate for
 
 ## DYNAMIC WORKFLOW COORDINATION
 
-This REPLACES fork mode / single-invoke as the delegation path while the mode is
-on. The win is a schema-validated, truncation-proof return.
+For an independent batch you've judged a good workflow fit, this is the delegation
+path; single discrete tasks and reasoning-dense work do NOT use it (see "What it
+changes" above). The win is a schema-validated, truncation-proof return on a
+known-safe batch.
 
 Each implementor `agent()` call MUST set `agentType: 'claude-3t:implementor'`,
 `model: 'haiku'` (never inherit the session model), and `schema:

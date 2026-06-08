@@ -12,6 +12,10 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 # Legitimate multi-file batches need many turns; do not starve them. The primary
 # loop-guard is the "no-progress" rule in the body (stop repeating a failing
 # approach after 2 attempts), not this number.
+# FROZEN: do NOT raise this. A turn-limit hit is a ROUTING failure (wrong-shape
+# work reached Haiku), not a budget shortfall — raising the cap only buys more
+# flailing before the same failure. Fix it upstream at the confidence gate
+# (3t-core.md HALT HANDLING / WHEN TO INVOKE IMPLEMENTOR), not here.
 maxTurns: 50
 ---
 
